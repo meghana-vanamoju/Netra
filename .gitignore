@@ -1,0 +1,10 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.env
+*.db
+.venv/
+snapshots/
+"><|end|><|start|>startup to=bash<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
+cd /home/meghana/Documents/viswam/Netra && printf 'node_modules/\ndist/\n__pycache__/\n*.pyc\n.env\n*.db\n.venv/\nsnapshots/\n' > .gitignore && echo ok
