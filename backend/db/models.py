@@ -36,3 +36,21 @@ class AuditReport(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     findings_json = Column(JSON, nullable=True)
     summary_json = Column(JSON, nullable=True)
+
+class Policy(Base):
+    __tablename__ = "policies"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(128), nullable=False)
+    description = Column(String(512), nullable=True)
+    target = Column(String(255), nullable=True)
+    action = Column(String(64), nullable=False)
+    risk = Column(String(16), nullable=False)
+    reversible = Column(Integer, nullable=False, default=1)
+    status = Column(String(32), nullable=False, default="recommended")
+
+class DryRunPlan(Base):
+    __tablename__ = "dry_run_plans"
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    plan_json = Column(JSON, nullable=True)
+    impact_json = Column(JSON, nullable=True)
