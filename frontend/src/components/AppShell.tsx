@@ -2,14 +2,19 @@ import type { MouseEvent, ReactNode } from "react";
 import { Icon } from "./ui";
 import "../styles.css";
 
-export type AppPage = "overview" | "devices" | "discovery" | "dns-activity";
+export type AppPage =
+  | "overview"
+  | "devices"
+  | "discovery"
+  | "dns-activity"
+  | "privacy-audit";
 
 const navigation = [
   { label: "Overview", icon: "grid" as const, href: "#overview", page: "overview" as const },
   { label: "Devices", icon: "devices" as const, href: "#devices", page: "devices" as const },
   { label: "LAN discovery", icon: "pulse" as const, href: "#discovery", page: "discovery" as const },
   { label: "DNS activity", icon: "pulse" as const, href: "#dns-activity", page: "dns-activity" as const },
-  { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit" },
+  { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit", page: "privacy-audit" as const },
 ];
 
 type AppShellProps = {
@@ -33,22 +38,8 @@ export function AppShell({
     event: MouseEvent<HTMLAnchorElement>,
     item: (typeof navigation)[number],
   ) => {
-    if (item.page) {
-      event.preventDefault();
-      onNavigate(item.page);
-      return;
-    }
-
-    if (page !== "overview") {
-      event.preventDefault();
-      onNavigate("overview");
-      window.setTimeout(() => {
-        document.getElementById(item.href.slice(1))?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 0);
-    }
+    event.preventDefault();
+    onNavigate(item.page);
   };
   const pageLabel =
     page === "dns-activity"
@@ -57,7 +48,9 @@ export function AppShell({
         ? "Devices"
         : page === "discovery"
           ? "LAN discovery"
-          : "Overview";
+          : page === "privacy-audit"
+            ? "Privacy audit"
+            : "Overview";
 
   return (
     <div className="app-shell">
@@ -142,6 +135,7 @@ export function AppShell({
               className={`mobile-nav-link${item.page === page ? " active" : ""}`}
               href={item.href}
               key={item.label}
+              aria-current={item.page === page ? "page" : undefined}
               onClick={(event) => navigate(event, item)}
             >
               <Icon name={item.icon} size={17} />

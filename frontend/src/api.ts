@@ -2,6 +2,7 @@ import type {
   AuditDetail,
   AuditFinding,
   AuditReport,
+  AuditRunResponse,
   BackendCapabilities,
   DeviceClassification,
   Device,
@@ -159,6 +160,18 @@ export function getAudit(auditId: number) {
 
 export function getAuditFindings(auditId: number) {
   return requestJson<AuditFinding[]>(`/api/audits/${auditId}/findings`);
+}
+
+export function runAudit(scope: "network" | "device", deviceId?: number) {
+  const query = new URLSearchParams({ scope });
+  if (scope === "device" && deviceId !== undefined) {
+    query.set("device_id", String(deviceId));
+  }
+  return requestJson<AuditRunResponse>(
+    `/api/audits/run?${query}`,
+    { method: "POST" },
+    60_000,
+  );
 }
 
 export function getBackendCapabilities() {

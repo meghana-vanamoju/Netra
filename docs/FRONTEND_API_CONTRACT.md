@@ -12,17 +12,20 @@ CORS.
 | `GET /api/db/health` | `{ "status": "ok" }` |
 | `GET /api/devices?limit=200` | Array of device records. The API accepts up to 200 records per request. |
 | `GET /api/dns/analytics/summary` | `{ "total": number, "unique_domains": number, "by_category": { [category: string]: number } }` |
-| `GET /api/audits` | Array of `{ "id": number, "scope": string, "created_at": string }` |
-| `GET /api/audits/{audit_id}` | `{ "id": number, "scope": string, "summary": object, "findings_count": number }` |
-| `GET /api/audits/{audit_id}/findings` | Array of saved audit finding records. |
+| `GET /api/audits` | Newest-first array of `{ "id": number, "scope": string, "created_at": string }`. Only saved reports are listed. |
+| `POST /api/audits/run?scope=network` | Runs and saves a network audit; returns `{ "audit_id": number, "findings": number, "summary": { "devices": number, "findings": number } }`. |
+| `POST /api/audits/run?scope=device&device_id={id}` | Runs and saves an audit for one inventory device; returns the same shape. |
+| `GET /api/audits/{audit_id}` | `{ "id": number, "scope": string, "summary": { "devices": number, "findings": number }, "findings_count": number }`. |
+| `GET /api/audits/{audit_id}/findings` | Array of `{ "id": string, "device_id": number \| null, "title": string, "description": string, "severity": string, "detection_rule": string, "evidence": string[], "timestamp": string, "recommended_next_step": string }`. |
+| `GET /api/devices?limit=200` | Used to select a device audit target and associate device IDs in findings with inventory identity. |
 | `GET /api/backend/capabilities` | `{ "configured_backend": string \| null, "available": boolean, "status": string }` |
 
 Device records include `id`, `ip_address`, nullable `mac_address`, `hostname`,
 `vendor`, and `discovery_source`, `first_seen`, `last_seen`, and nullable
 `metadata`.
 
-The dashboard reads only these endpoints. It does not start an audit, modify a
-policy, or apply network configuration. A configured DNS backend indicates
+The dashboard overview reads these endpoints but does not start an audit,
+modify a policy, or apply network configuration. A configured DNS backend indicates
 configuration only; it does not indicate active enforcement.
 
 ## Other API families
@@ -74,6 +77,24 @@ for the top 20 and filters those returned rows locally.
 The backend labels domains not matched by its configured rules as `Unknown`.
 This is an absence of a category match, not a maliciousness verdict. The page
 does not collect DNS traffic, trigger DNS queries, or change network settings.
+
+## Privacy audit UI
+
+The audit page reads the saved report list, report summary, findings, and device
+inventory. It offers only the two scopes implemented by `POST /api/audits/run`:
+`network` and `device` (with a required device ID for the latter). An audit is
+never run on page load; the user must submit the form. The backend evaluates
+inventory metadata and stored DNS events, then saves a report. It does not
+perform a LAN scan or apply a policy.
+
+The audit history endpoint lists saved reports only. It has no failed-run
+records, status field, or device target in its report-list/detail responses.
+Consequently, a listed report is a saved completion, while a failed or
+interrupted request cannot be represented as a historical failed audit. A
+successful run response confirms the report ID, finding count, and summary;
+the UI labels completion only after that response. Finding severity and
+evidence are displayed as returned and are not converted into a compromise
+verdict or risk score.
 
 ## Errors and pagination
 

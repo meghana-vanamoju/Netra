@@ -82,7 +82,7 @@ export type AuditDetail = {
   summary: {
     devices?: number;
     findings?: number;
-  };
+  } | null;
   findings_count: number;
 };
 
@@ -92,7 +92,19 @@ export type AuditFinding = {
   title: string;
   description: string;
   severity: string;
+  detection_rule: string;
+  evidence: string[];
   timestamp: string;
+  recommended_next_step: string;
+};
+
+export type AuditRunResponse = {
+  audit_id: number;
+  findings: number;
+  summary: {
+    devices: number;
+    findings: number;
+  };
 };
 
 export type BackendCapabilities = {

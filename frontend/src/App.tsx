@@ -14,6 +14,7 @@ import type { AppPage } from "./components/AppShell";
 import { DeviceInventoryPage } from "./components/DeviceInventoryPage";
 import { DiscoveryPage } from "./components/DiscoveryPage";
 import { DnsAnalyticsPage } from "./components/DnsAnalyticsPage";
+import { PrivacyAuditPage } from "./components/PrivacyAuditPage";
 import { ErrorMessage, Icon, LoadingValue } from "./components/ui";
 import type {
   ApiError,
@@ -68,6 +69,9 @@ function pageFromHash(): AppPage {
   }
   if (window.location.hash === "#dns-activity") {
     return "dns-activity";
+  }
+  if (window.location.hash === "#privacy-audit") {
+    return "privacy-audit";
   }
   return "overview";
 }
@@ -197,6 +201,8 @@ function App() {
         <DiscoveryPage />
       ) : page === "dns-activity" ? (
         <DnsAnalyticsPage />
+      ) : page === "privacy-audit" ? (
+        <PrivacyAuditPage />
       ) : (
       <>
           <div className="page-heading">
