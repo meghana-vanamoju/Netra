@@ -7,6 +7,7 @@ from db.session import get_db, init_db
 from api_devices import router as devices_router
 from api_discovery import router as discovery_router
 from api_classification import router as classification_router
+from api_dns import router as dns_router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -17,6 +18,7 @@ app = FastAPI(title="Netra API", version="0.1.0", lifespan=lifespan)
 app.include_router(devices_router)
 app.include_router(discovery_router)
 app.include_router(classification_router)
+app.include_router(dns_router)
 
 app.add_middleware(
     CORSMiddleware,
