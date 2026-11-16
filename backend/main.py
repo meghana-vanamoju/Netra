@@ -15,6 +15,7 @@ from api_snapshot import router as snapshot_router
 from api_capabilities import router as capabilities_router
 from api_enforcement import router as enforcement_router
 from api_verification import router as verification_router
+from api_recovery import router as recovery_router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -34,6 +35,7 @@ app.include_router(snapshot_router)
 app.include_router(capabilities_router)
 app.include_router(enforcement_router)
 app.include_router(verification_router)
+app.include_router(recovery_router)
 
 app.add_middleware(
     CORSMiddleware,
