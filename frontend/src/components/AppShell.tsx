@@ -2,13 +2,13 @@ import type { MouseEvent, ReactNode } from "react";
 import { Icon } from "./ui";
 import "../styles.css";
 
-export type AppPage = "overview" | "devices" | "discovery";
+export type AppPage = "overview" | "devices" | "discovery" | "dns-activity";
 
 const navigation = [
   { label: "Overview", icon: "grid" as const, href: "#overview", page: "overview" as const },
   { label: "Devices", icon: "devices" as const, href: "#devices", page: "devices" as const },
   { label: "LAN discovery", icon: "pulse" as const, href: "#discovery", page: "discovery" as const },
-  { label: "DNS activity", icon: "pulse" as const, href: "#dns-activity" },
+  { label: "DNS activity", icon: "pulse" as const, href: "#dns-activity", page: "dns-activity" as const },
   { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit" },
 ];
 
@@ -50,6 +50,14 @@ export function AppShell({
       }, 0);
     }
   };
+  const pageLabel =
+    page === "dns-activity"
+      ? "DNS activity"
+      : page === "devices"
+        ? "Devices"
+        : page === "discovery"
+          ? "LAN discovery"
+          : "Overview";
 
   return (
     <div className="app-shell">
@@ -108,7 +116,7 @@ export function AppShell({
           <div className="breadcrumb">
             <span>Workspace</span>
             <span className="breadcrumb-slash">/</span>
-            <strong>Overview</strong>
+            <strong>{pageLabel}</strong>
           </div>
           <div className="topbar-actions">
             <div

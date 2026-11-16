@@ -7,6 +7,9 @@ import type {
   Device,
   DiscoveryResponse,
   DiscoveryResult,
+  DnsDeviceCount,
+  DnsDomainCount,
+  DnsEvent,
   DnsSummary,
   HealthResponse,
 } from "./types";
@@ -108,8 +111,42 @@ export function getDiscoveryResults() {
   return requestJson<DiscoveryResult[]>("/api/discovery/results");
 }
 
-export function getDnsSummary() {
-  return requestJson<DnsSummary>("/api/dns/analytics/summary");
+export function getDnsSummary(deviceId?: number) {
+  const query = new URLSearchParams();
+  if (deviceId !== undefined) {
+    query.set("device_id", String(deviceId));
+  }
+  const search = query.toString();
+  const suffix = search ? `?${search}` : "";
+  return requestJson<DnsSummary>(`/api/dns/analytics/summary${suffix}`);
+}
+
+export function getDnsDomains(limit = 20) {
+  const query = new URLSearchParams({ limit: String(limit) });
+  return requestJson<DnsDomainCount[]>(`/api/dns/analytics/domains?${query}`);
+}
+
+export function getDnsDeviceCounts() {
+  return requestJson<DnsDeviceCount[]>("/api/dns/analytics/devices");
+}
+
+export function getDnsEvents({
+  limit = 50,
+  offset = 0,
+  deviceId,
+}: {
+  limit?: number;
+  offset?: number;
+  deviceId?: number;
+} = {}) {
+  const query = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (deviceId !== undefined) {
+    query.set("device_id", String(deviceId));
+  }
+  return requestJson<DnsEvent[]>(`/api/dns/events?${query}`);
 }
 
 export function getAuditReports() {

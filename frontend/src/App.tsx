@@ -13,6 +13,7 @@ import { AppShell } from "./components/AppShell";
 import type { AppPage } from "./components/AppShell";
 import { DeviceInventoryPage } from "./components/DeviceInventoryPage";
 import { DiscoveryPage } from "./components/DiscoveryPage";
+import { DnsAnalyticsPage } from "./components/DnsAnalyticsPage";
 import { ErrorMessage, Icon, LoadingValue } from "./components/ui";
 import type {
   ApiError,
@@ -65,6 +66,9 @@ function pageFromHash(): AppPage {
   if (window.location.hash === "#discovery") {
     return "discovery";
   }
+  if (window.location.hash === "#dns-activity") {
+    return "dns-activity";
+  }
   return "overview";
 }
 
@@ -74,7 +78,8 @@ function App() {
   const [page, setPage] = useState<AppPage>(pageFromHash);
 
   const navigate = useCallback((nextPage: AppPage) => {
-    const hash = `#${nextPage}`;
+    const hash =
+      nextPage === "dns-activity" ? "#dns-activity" : `#${nextPage}`;
     if (window.location.hash !== hash) {
       window.location.hash = hash;
     }
@@ -190,6 +195,8 @@ function App() {
         <DeviceInventoryPage />
       ) : page === "discovery" ? (
         <DiscoveryPage />
+      ) : page === "dns-activity" ? (
+        <DnsAnalyticsPage />
       ) : (
       <>
           <div className="page-heading">

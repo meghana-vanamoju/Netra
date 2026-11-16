@@ -51,6 +51,25 @@ export type DnsSummary = {
   by_category: Record<string, number>;
 };
 
+export type DnsDomainCount = {
+  domain: string;
+  count: number;
+  category: string;
+};
+
+export type DnsDeviceCount = {
+  device_id: number | null;
+  count: number;
+};
+
+export type DnsEvent = {
+  id: number;
+  domain: string;
+  category: string | null;
+  device_id: number | null;
+  timestamp: string;
+};
+
 export type AuditReport = {
   id: number;
   scope: string;

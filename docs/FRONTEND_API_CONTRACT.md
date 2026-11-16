@@ -54,6 +54,27 @@ Classification is read from the existing endpoint and is not persisted or
 changed by this UI. `Unknown` remains an explicit category when the backend
 does not have enough evidence.
 
+## DNS analytics UI
+
+| Method and path | Response and behavior |
+|---|---|
+| `GET /api/dns/analytics/summary` | `{ "total": number, "unique_domains": number, "by_category": { [category: string]: number } }`. |
+| `GET /api/dns/analytics/domains?limit=20` | Array of `{ "domain": string, "count": number, "category": string }`, ordered by query count descending. |
+| `GET /api/dns/analytics/devices` | Array of `{ "device_id": number \| null, "count": number }`; a null ID represents events not linked to an inventory device. |
+| `GET /api/dns/events?limit=50&offset=0` | Newest-first array of `{ "id": number, "domain": string, "category": string \| null, "device_id": number \| null, "timestamp": string }`. Supports offset pagination and an optional `device_id` filter. |
+| `GET /api/devices?limit=200` | Used to associate DNS device IDs with known inventory identity where available. |
+
+DNS summary, domain, and device endpoints are aggregates; `/api/dns/events`
+returns individual stored records. The explorer searches and filters only the
+currently fetched event page, because the API does not expose text or category
+filters. It requests pages of 50 and offers a next page when the backend returns
+a full page; the event-list response has no total count. The domain list asks
+for the top 20 and filters those returned rows locally.
+
+The backend labels domains not matched by its configured rules as `Unknown`.
+This is an absence of a category match, not a maliciousness verdict. The page
+does not collect DNS traffic, trigger DNS queries, or change network settings.
+
 ## Errors and pagination
 
 API errors use JSON shaped as `{ "detail": "..." }`. Device inventory accepts

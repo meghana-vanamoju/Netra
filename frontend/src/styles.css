@@ -2102,3 +2102,410 @@ h1 span {
     margin-left: auto;
   }
 }
+
+.dns-page {
+  display: grid;
+  gap: 17px;
+}
+
+.dns-readonly-note,
+.dns-empty-banner,
+.dns-filter-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid #e3e9f4;
+  border-radius: 9px;
+  color: #64748a;
+  background: #f8faff;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.dns-readonly-note svg {
+  flex: 0 0 auto;
+  color: #7185d5;
+}
+
+.dns-empty-banner {
+  border-color: #e4e9f1;
+  background: #fff;
+}
+
+.dns-empty-banner .empty-icon {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.dns-empty-banner > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dns-empty-banner strong,
+.dns-empty-inline strong {
+  color: #4a586d;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dns-empty-banner > div > span,
+.dns-empty-inline > span:last-child {
+  color: #8c98a8;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.dns-metric-grid {
+  margin-bottom: 0;
+}
+
+.dns-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.dns-panel,
+.dns-domains-panel,
+.dns-events-panel {
+  min-width: 0;
+}
+
+.dns-category-list {
+  display: grid;
+  gap: 13px;
+  min-height: 178px;
+  align-content: center;
+  padding: 15px 0;
+}
+
+.dns-category-row {
+  display: grid;
+  gap: 7px;
+}
+
+.dns-category-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #566378;
+  font-size: 10px;
+}
+
+.dns-category-label strong {
+  margin-left: auto;
+  color: #38455a;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dns-category-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.dns-category-advertising {
+  background-color: #7084e8;
+}
+
+.dns-category-tracking {
+  background-color: #44b89b;
+}
+
+.dns-category-telemetry {
+  background-color: #e7aa62;
+}
+
+.dns-category-unknown {
+  background-color: #a4afbd;
+}
+
+.dns-percent {
+  min-width: 30px;
+  color: #98a2b1;
+  font-size: 9px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dns-category-track,
+.dns-device-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #f0f2f6;
+}
+
+.dns-category-bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+}
+
+.dns-chart-caption {
+  margin-top: 10px;
+  color: #929eae;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.dns-empty-inline {
+  display: grid;
+  min-height: 170px;
+  justify-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+}
+
+.dns-empty-inline .empty-icon {
+  margin-bottom: 1px;
+}
+
+.dns-empty-inline > span:last-child {
+  max-width: 300px;
+}
+
+.dns-device-list {
+  display: grid;
+  gap: 13px;
+  min-height: 178px;
+  align-content: center;
+  padding: 14px 0 8px;
+}
+
+.dns-device-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(70px, 1.15fr) auto auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.dns-device-title {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  color: #566378;
+  font-size: 10px;
+}
+
+.dns-device-title > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dns-device-subtitle {
+  color: #98a2b1;
+  font-size: 8px;
+}
+
+.dns-device-track {
+  height: 6px;
+}
+
+.dns-device-track > span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: #7185e5;
+}
+
+.dns-device-row > strong {
+  color: #38455a;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dns-device-link,
+.dns-filter-notice button,
+.dns-event-device {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dns-domains-panel,
+.dns-events-panel {
+  padding-bottom: 16px;
+  scroll-margin-top: 88px;
+}
+
+.dns-domain-search {
+  width: min(100%, 340px);
+  margin: 14px 0 13px;
+}
+
+.dns-domain-table {
+  min-width: 440px;
+}
+
+.dns-domain-name {
+  color: #47556c !important;
+  font-weight: 600;
+}
+
+.dns-category-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 7px;
+  border-radius: 5px;
+  color: #5266b4;
+  background: #eef1ff;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dns-category-pill.dns-category-advertising {
+  color: #5266b4;
+  background: #eef1ff;
+}
+
+.dns-category-pill.dns-category-tracking {
+  color: #39826f;
+  background: #eaf6f0;
+}
+
+.dns-category-pill.dns-category-telemetry {
+  color: #9c7445;
+  background: #fff5e7;
+}
+
+.dns-category-pill.dns-category-unknown {
+  color: #727e8e;
+  background: #f0f2f5;
+}
+
+.dns-domain-count {
+  color: #38455a !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.dns-events-description {
+  margin-top: 8px;
+  color: #8793a5;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.dns-filter-notice {
+  justify-content: flex-start;
+  margin-top: 13px;
+  padding: 9px 11px;
+  font-size: 10px;
+}
+
+.dns-filter-notice strong {
+  color: #4b5c75;
+}
+
+.dns-filter-notice button {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.dns-event-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.55fr);
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.dns-event-table {
+  min-width: 720px;
+}
+
+.dns-event-device {
+  color: #536bd1;
+  font-size: 9px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.dns-event-pagination {
+  justify-content: space-between;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.dns-event-pagination .pagination-buttons > span {
+  color: #929eae;
+  font-size: 9px;
+}
+
+@media (max-width: 1050px) {
+  .dns-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dns-page {
+    gap: 13px;
+  }
+
+  .dns-analytics-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  .dns-event-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .dns-event-pagination {
+    align-items: flex-start;
+  }
+
+  .dns-event-pagination .pagination-buttons {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 420px) {
+  .dns-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dns-readonly-note,
+  .dns-empty-banner {
+    align-items: flex-start;
+    padding: 11px;
+  }
+
+  .dns-device-row {
+    grid-template-columns: minmax(80px, 1fr) minmax(50px, 0.75fr) auto;
+    gap: 7px;
+  }
+
+  .dns-device-link {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .dns-filter-notice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .dns-filter-notice button {
+    margin-left: 0;
+  }
+
+  .dns-event-pagination .pagination-buttons > span {
+    width: 100%;
+    text-align: right;
+  }
+}
