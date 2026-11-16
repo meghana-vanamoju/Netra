@@ -14,7 +14,7 @@ class Device(Base):
     discovery_source = Column(String(64), nullable=True)
     first_seen = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_seen = Column(DateTime, default=datetime.utcnow, nullable=False)
-    metadata_ = Column("metadata", JSON, nullable=True)
+    extra = Column("metadata", JSON, nullable=True)
     dns_events = relationship("DNSEvent", back_populates="device")
 
 class DNSEvent(Base):

@@ -20,6 +20,9 @@ def test_init_and_session():
         db.add(e)
         db.commit()
         assert db.query(models.DNSEvent).count() == 1
+        db.query(models.DNSEvent).delete()
+        db.query(models.Device).delete()
+        db.commit()
     finally:
         db.close()
 
