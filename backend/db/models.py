@@ -27,3 +27,12 @@ class DNSEvent(Base):
     category = Column(String(64), nullable=True)
     blocked = Column(Integer, nullable=True)  # 1/0/None
     device = relationship("Device", back_populates="dns_events")
+
+class AuditReport(Base):
+    __tablename__ = "audit_reports"
+    id = Column(Integer, primary_key=True)
+    scope = Column(String(64), nullable=False)  # network or device
+    device_id = Column(Integer, ForeignKey("devices.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    findings_json = Column(JSON, nullable=True)
+    summary_json = Column(JSON, nullable=True)
