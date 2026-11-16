@@ -10,6 +10,7 @@ from api_classification import router as classification_router
 from api_dns import router as dns_router
 from api_audit import router as audit_router, device_router as audit_device_router
 from api_policy import router as policy_router
+from api_consent import router as consent_router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -24,6 +25,7 @@ app.include_router(dns_router)
 app.include_router(audit_router)
 app.include_router(audit_device_router)
 app.include_router(policy_router)
+app.include_router(consent_router)
 
 app.add_middleware(
     CORSMiddleware,

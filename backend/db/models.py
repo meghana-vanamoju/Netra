@@ -46,7 +46,10 @@ class Policy(Base):
     action = Column(String(64), nullable=False)
     risk = Column(String(16), nullable=False)
     reversible = Column(Integer, nullable=False, default=1)
-    status = Column(String(32), nullable=False, default="recommended")
+    status = Column(String(32), nullable=False, default="proposed")
+    dry_run_plan_id = Column(Integer, ForeignKey("dry_run_plans.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    approver = Column(String(128), nullable=True)
 
 class DryRunPlan(Base):
     __tablename__ = "dry_run_plans"
@@ -54,3 +57,11 @@ class DryRunPlan(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     plan_json = Column(JSON, nullable=True)
     impact_json = Column(JSON, nullable=True)
+
+class PolicyExecution(Base):
+    __tablename__ = "policy_executions"
+    id = Column(Integer, primary_key=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=False)
+    status = Column(String(32), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    details = Column(JSON, nullable=True)
