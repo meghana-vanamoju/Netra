@@ -25,6 +25,26 @@ export type Device = {
   metadata: Record<string, unknown> | null;
 };
 
+export type DeviceClassification = {
+  device_id: number;
+  category: string;
+  confidence: number;
+  reasons: string[];
+  vendor_identified: boolean;
+};
+
+export type DiscoveryResult = {
+  ip_address: string;
+  mac_address: string | null;
+  hostname: string | null;
+  discovery_source: string;
+};
+
+export type DiscoveryResponse = {
+  discovered: number;
+  subnet: string;
+};
+
 export type DnsSummary = {
   total: number;
   unique_domains: number;

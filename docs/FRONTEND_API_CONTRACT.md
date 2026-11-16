@@ -29,8 +29,30 @@ configuration only; it does not indicate active enforcement.
 
 The backend also exposes device discovery and classification, DNS events and
 analytics, audits, policy planning and consent, snapshots, enforcement,
-verification, and recovery APIs. These are not invoked by the dashboard
-foundation.
+verification, and recovery APIs.
+
+## Device inventory and discovery UI
+
+| Method and path | Response and behavior |
+|---|---|
+| `GET /api/devices?limit=200&offset=0` | Array of device records; the UI searches and paginates the returned first 200 locally. |
+| `GET /api/classifications` | Array of `{ "device_id": number, "category": string, "confidence": number, "reasons": string[], "vendor_identified": boolean }`. |
+| `POST /api/devices/{device_id}/classify` | Recalculates and returns one device's classification; it does not persist the result. The UI only calls this after the user requests recalculation in device details. |
+| `POST /api/discovery/run?subnet={cidr}` | `{ "discovered": number, "subnet": string }`. Validates that the subnet is private, then synchronously scans and registers discoveries in the inventory. |
+| `GET /api/discovery/results` | Most recent in-memory discovery results: an array of `{ "ip_address": string, "mac_address": string \| null, "hostname": string \| null, "discovery_source": string }`. |
+
+Discovery only runs after the user submits a private subnet in the LAN
+discovery screen. The backend probes up to 64 host addresses and reads its
+local ARP table; it provides no progress stream, scan history, or permission
+diagnostic. Results are process-local and may be lost on backend restart. A
+zero result is not proof that the subnet has no devices. A discovery success
+response confirms the endpoint completed and returned a count, not complete
+network coverage. The UI limits CIDR ranges to private IPv4 networks no larger
+than `/16`, avoiding excessively large ranges for this synchronous endpoint.
+
+Classification is read from the existing endpoint and is not persisted or
+changed by this UI. `Unknown` remains an explicit category when the backend
+does not have enough evidence.
 
 ## Errors and pagination
 

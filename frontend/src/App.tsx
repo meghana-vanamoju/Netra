@@ -10,6 +10,9 @@ import {
   getHealth,
 } from "./api";
 import { AppShell } from "./components/AppShell";
+import type { AppPage } from "./components/AppShell";
+import { DeviceInventoryPage } from "./components/DeviceInventoryPage";
+import { DiscoveryPage } from "./components/DiscoveryPage";
 import { ErrorMessage, Icon, LoadingValue } from "./components/ui";
 import type {
   ApiError,
@@ -55,9 +58,28 @@ function toApiError(error: unknown): ApiError {
   return new Error(`Unexpected API error: ${String(error)}`);
 }
 
+function pageFromHash(): AppPage {
+  if (window.location.hash === "#devices") {
+    return "devices";
+  }
+  if (window.location.hash === "#discovery") {
+    return "discovery";
+  }
+  return "overview";
+}
+
 function App() {
   const [data, setData] = useState<DashboardData>(initialState);
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState<AppPage>(pageFromHash);
+
+  const navigate = useCallback((nextPage: AppPage) => {
+    const hash = `#${nextPage}`;
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+    setPage(nextPage);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     setRefreshing(true);
@@ -132,6 +154,12 @@ function App() {
     void loadDashboard();
   }, [loadDashboard]);
 
+  useEffect(() => {
+    const syncPage = () => setPage(pageFromHash());
+    window.addEventListener("hashchange", syncPage);
+    return () => window.removeEventListener("hashchange", syncPage);
+  }, []);
+
   const apiOnline =
     data.health.status === "ready" && data.health.data.status === "ok";
   const apiChecking = data.health.status === "loading";
@@ -155,7 +183,15 @@ function App() {
       apiOnline={apiOnline}
       apiChecking={apiChecking}
       auditCount={latestAudit ? findings.length : null}
+      page={page}
+      onNavigate={navigate}
     >
+      {page === "devices" ? (
+        <DeviceInventoryPage />
+      ) : page === "discovery" ? (
+        <DiscoveryPage />
+      ) : (
+      <>
           <div className="page-heading">
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> NETWORK OVERVIEW</div>
@@ -452,6 +488,8 @@ function App() {
             <span><span className="footer-brand-mark"><Icon name="router" size={14} /></span> NETRA <span className="footer-separator">·</span> SEE YOUR NETWORK CLEARLY. PROTECT IT SAFELY.</span>
             <span>Dashboard data is fetched from your backend. No demo data shown.</span>
           </footer>
+      </>
+      )}
     </AppShell>
   );
 }

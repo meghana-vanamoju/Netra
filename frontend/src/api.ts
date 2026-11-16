@@ -3,7 +3,10 @@ import type {
   AuditFinding,
   AuditReport,
   BackendCapabilities,
+  DeviceClassification,
   Device,
+  DiscoveryResponse,
+  DiscoveryResult,
   DnsSummary,
   HealthResponse,
 } from "./types";
@@ -24,23 +27,25 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function requestJson<T>(path: string): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs = 10_000,
+): Promise<T> {
   let response: Response;
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { Accept: "application/json" },
+      ...options,
+      headers: { Accept: "application/json", ...options.headers },
       signal: controller.signal,
     });
   } catch {
     const message = controller.signal.aborted
       ? `The request to ${API_BASE_URL} timed out.`
       : `Could not connect to ${API_BASE_URL}. Check the backend URL and that the backend is running.`;
-    throw new ApiRequestError(
-      message,
-      0,
-    );
+    throw new ApiRequestError(message, 0);
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -78,6 +83,29 @@ export function getDatabaseHealth() {
 
 export function getDevices() {
   return requestJson<Device[]>("/api/devices?limit=200");
+}
+
+export function getClassifications() {
+  return requestJson<DeviceClassification[]>("/api/classifications");
+}
+
+export function classifyDevice(deviceId: number) {
+  return requestJson<DeviceClassification>(`/api/devices/${deviceId}/classify`, {
+    method: "POST",
+  });
+}
+
+export function runDiscovery(subnet: string) {
+  const query = new URLSearchParams({ subnet });
+  return requestJson<DiscoveryResponse>(
+    `/api/discovery/run?${query.toString()}`,
+    { method: "POST" },
+    180_000,
+  );
+}
+
+export function getDiscoveryResults() {
+  return requestJson<DiscoveryResult[]>("/api/discovery/results");
 }
 
 export function getDnsSummary() {

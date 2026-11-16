@@ -1,10 +1,13 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Icon } from "./ui";
 import "../styles.css";
 
+export type AppPage = "overview" | "devices" | "discovery";
+
 const navigation = [
-  { label: "Overview", icon: "grid" as const, href: "#overview" },
-  { label: "Devices", icon: "devices" as const, href: "#devices" },
+  { label: "Overview", icon: "grid" as const, href: "#overview", page: "overview" as const },
+  { label: "Devices", icon: "devices" as const, href: "#devices", page: "devices" as const },
+  { label: "LAN discovery", icon: "pulse" as const, href: "#discovery", page: "discovery" as const },
   { label: "DNS activity", icon: "pulse" as const, href: "#dns-activity" },
   { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit" },
 ];
@@ -13,6 +16,8 @@ type AppShellProps = {
   apiOnline: boolean;
   apiChecking: boolean;
   auditCount: number | null;
+  page: AppPage;
+  onNavigate: (page: AppPage) => void;
   children: ReactNode;
 };
 
@@ -20,28 +25,61 @@ export function AppShell({
   apiOnline,
   apiChecking,
   auditCount,
+  page,
+  onNavigate,
   children,
 }: AppShellProps) {
+  const navigate = (
+    event: MouseEvent<HTMLAnchorElement>,
+    item: (typeof navigation)[number],
+  ) => {
+    if (item.page) {
+      event.preventDefault();
+      onNavigate(item.page);
+      return;
+    }
+
+    if (page !== "overview") {
+      event.preventDefault();
+      onNavigate("overview");
+      window.setTimeout(() => {
+        document.getElementById(item.href.slice(1))?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
+    }
+  };
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#overview" aria-label="Netra home">
+        <a
+          className="brand"
+          href="#overview"
+          aria-label="Netra home"
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigate("overview");
+          }}
+        >
           <span className="brand-mark"><Icon name="router" size={23} /></span>
           <span className="brand-name">netra<span>.</span></span>
         </a>
 
         <div className="workspace-label">WORKSPACE</div>
         <nav className="primary-nav" aria-label="Main navigation">
-          {navigation.map((item, index) => (
+          {navigation.map((item) => (
             <a
-              className={`nav-link${index === 0 ? " active" : ""}`}
+              className={`nav-link${item.page === page ? " active" : ""}`}
               href={item.href}
               key={item.label}
-              aria-current={index === 0 ? "page" : undefined}
+              aria-current={item.page === page ? "page" : undefined}
+              onClick={(event) => navigate(event, item)}
             >
               <Icon name={item.icon} size={19} />
               <span>{item.label}</span>
-              {item.label === "Privacy audit" && auditCount !== null && (
+              {item.label === "Privacy audit" && auditCount !== null && page === "overview" && (
                 <span className="nav-count">{auditCount}</span>
               )}
             </a>
@@ -91,11 +129,12 @@ export function AppShell({
         </header>
 
         <nav className="mobile-nav" aria-label="Main navigation">
-          {navigation.map((item, index) => (
+          {navigation.map((item) => (
             <a
-              className={`mobile-nav-link${index === 0 ? " active" : ""}`}
+              className={`mobile-nav-link${item.page === page ? " active" : ""}`}
               href={item.href}
               key={item.label}
+              onClick={(event) => navigate(event, item)}
             >
               <Icon name={item.icon} size={17} />
               <span>
@@ -103,6 +142,8 @@ export function AppShell({
                   ? "DNS"
                   : item.label === "Privacy audit"
                     ? "Audit"
+                    : item.label === "LAN discovery"
+                      ? "Discover"
                     : item.label}
               </span>
             </a>
