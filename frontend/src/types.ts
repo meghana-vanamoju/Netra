@@ -107,6 +107,52 @@ export type AuditRunResponse = {
   };
 };
 
+export type PolicySummary = {
+  id: number;
+  name: string;
+  risk: string;
+  status: string;
+};
+
+export type PolicyDetail = {
+  id: number;
+  name: string;
+  action: string;
+  risk: string;
+  reversible: boolean;
+};
+
+export type PolicyPlanResponse = {
+  policies: number[];
+};
+
+export type DryRunResult = {
+  plan_id: number;
+  plan: {
+    policies: number[];
+    affected_queries: number;
+    unique_domains: number;
+  };
+  impact: {
+    projected_blocked_queries: number;
+    note: string;
+  };
+};
+
+export type SavedDryRunPlan = {
+  id: number;
+  plan: {
+    policies?: number[];
+    affected_queries?: number;
+    unique_domains?: number;
+  } | null;
+};
+
+export type DryRunImpact = {
+  projected_blocked_queries?: number;
+  note?: string;
+} | null;
+
 export type BackendCapabilities = {
   configured_backend: string | null;
   available: boolean;

@@ -96,6 +96,38 @@ the UI labels completion only after that response. Finding severity and
 evidence are displayed as returned and are not converted into a compromise
 verdict or risk score.
 
+## Policy planning UI
+
+| Method and path | Response and behavior |
+|---|---|
+| `GET /api/audits` | Saved completed reports used as policy-plan inputs. |
+| `GET /api/audits/{audit_id}/findings` | Finding list used to explain the backend's current generation rule. |
+| `POST /api/policies/plan?audit_id={id}` | Generates and persists policies for matching findings; returns `{ "policies": number[] }` containing the created policy IDs. |
+| `GET /api/policies` | Array of `{ "id": number, "name": string, "risk": string, "status": string }`. |
+| `GET /api/policies/{policy_id}` | `{ "id": number, "name": string, "action": string, "risk": string, "reversible": boolean }`. |
+| `POST /api/policies/dry-run` | JSON request body is an array of policy IDs. Returns `{ "plan_id": number, "plan": { "policies": number[], "affected_queries": number, "unique_domains": number }, "impact": { "projected_blocked_queries": number, "note": string } }` and persists a dry-run plan. |
+| `GET /api/policies/dry-run/{plan_id}` | `{ "id": number, "plan": object }` for a saved dry-run plan. |
+| `GET /api/policies/dry-run/{plan_id}/impact` | Saved impact object, including `projected_blocked_queries` and `note`. |
+
+Policy planning matches audit finding titles containing “tracking” or
+“telemetry”. The plan response only returns policy IDs; policy summaries do not
+include descriptions, targets, audit linkage, or per-policy rationale. Policy
+details expose action, risk, and reversibility but still omit the target.
+Generated policy IDs are linked to an audit in the UI only for the current
+planning response; that relationship is not persisted or exposed by the API.
+The planner creates a new policy for each matching finding and exposes no
+deduplication or idempotency guarantee; repeated requests may create additional
+records.
+
+Dry-run projections count stored DNS events in Advertising,
+Tracking/Analytics, and Telemetry categories except exact domains
+`google.com`, `microsoft.com`, and `apple.com`. The response has aggregate
+counts, not per-policy attribution or an affected-domain list. Both planning
+and dry-run are explicit write operations: planning saves proposed policies,
+and dry-run saves a plan record. The planning UI does not approve, apply, or
+enforce policies. A projected blocked-query count is not evidence that traffic
+was blocked or that protection is active.
+
 ## Errors and pagination
 
 API errors use JSON shaped as `{ "detail": "..." }`. Device inventory accepts

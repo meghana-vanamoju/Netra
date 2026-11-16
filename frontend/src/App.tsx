@@ -15,6 +15,7 @@ import { DeviceInventoryPage } from "./components/DeviceInventoryPage";
 import { DiscoveryPage } from "./components/DiscoveryPage";
 import { DnsAnalyticsPage } from "./components/DnsAnalyticsPage";
 import { PrivacyAuditPage } from "./components/PrivacyAuditPage";
+import { PolicyPlanningPage } from "./components/PolicyPlanningPage";
 import { ErrorMessage, Icon, LoadingValue } from "./components/ui";
 import type {
   ApiError,
@@ -72,6 +73,9 @@ function pageFromHash(): AppPage {
   }
   if (window.location.hash === "#privacy-audit") {
     return "privacy-audit";
+  }
+  if (window.location.hash === "#policy-planning") {
+    return "policy-planning";
   }
   return "overview";
 }
@@ -203,6 +207,8 @@ function App() {
         <DnsAnalyticsPage />
       ) : page === "privacy-audit" ? (
         <PrivacyAuditPage />
+      ) : page === "policy-planning" ? (
+        <PolicyPlanningPage />
       ) : (
       <>
           <div className="page-heading">

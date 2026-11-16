@@ -12,7 +12,13 @@ import type {
   DnsDomainCount,
   DnsEvent,
   DnsSummary,
+  DryRunImpact,
+  DryRunResult,
   HealthResponse,
+  PolicyDetail,
+  PolicyPlanResponse,
+  PolicySummary,
+  SavedDryRunPlan,
 } from "./types";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -176,4 +182,35 @@ export function runAudit(scope: "network" | "device", deviceId?: number) {
 
 export function getBackendCapabilities() {
   return requestJson<BackendCapabilities>("/api/backend/capabilities");
+}
+
+export function getPolicies() {
+  return requestJson<PolicySummary[]>("/api/policies");
+}
+
+export function getPolicy(policyId: number) {
+  return requestJson<PolicyDetail>(`/api/policies/${policyId}`);
+}
+
+export function generatePolicyPlan(auditId: number) {
+  const query = new URLSearchParams({ audit_id: String(auditId) });
+  return requestJson<PolicyPlanResponse>(`/api/policies/plan?${query}`, {
+    method: "POST",
+  });
+}
+
+export function runPolicyDryRun(policyIds: number[]) {
+  return requestJson<DryRunResult>("/api/policies/dry-run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(policyIds),
+  });
+}
+
+export function getSavedDryRunPlan(planId: number) {
+  return requestJson<SavedDryRunPlan>(`/api/policies/dry-run/${planId}`);
+}
+
+export function getDryRunImpact(planId: number) {
+  return requestJson<DryRunImpact>(`/api/policies/dry-run/${planId}/impact`);
 }

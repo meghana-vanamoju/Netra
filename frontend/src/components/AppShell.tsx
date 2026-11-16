@@ -7,7 +7,8 @@ export type AppPage =
   | "devices"
   | "discovery"
   | "dns-activity"
-  | "privacy-audit";
+  | "privacy-audit"
+  | "policy-planning";
 
 const navigation = [
   { label: "Overview", icon: "grid" as const, href: "#overview", page: "overview" as const },
@@ -15,6 +16,7 @@ const navigation = [
   { label: "LAN discovery", icon: "pulse" as const, href: "#discovery", page: "discovery" as const },
   { label: "DNS activity", icon: "pulse" as const, href: "#dns-activity", page: "dns-activity" as const },
   { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit", page: "privacy-audit" as const },
+  { label: "Policy planning", icon: "shield" as const, href: "#policy-planning", page: "policy-planning" as const },
 ];
 
 type AppShellProps = {
@@ -50,6 +52,8 @@ export function AppShell({
           ? "LAN discovery"
           : page === "privacy-audit"
             ? "Privacy audit"
+            : page === "policy-planning"
+              ? "Policy planning"
             : "Overview";
 
   return (
@@ -144,6 +148,8 @@ export function AppShell({
                   ? "DNS"
                   : item.label === "Privacy audit"
                     ? "Audit"
+                    : item.label === "Policy planning"
+                      ? "Policies"
                     : item.label === "LAN discovery"
                       ? "Discover"
                     : item.label}

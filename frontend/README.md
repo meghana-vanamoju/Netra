@@ -1,6 +1,6 @@
 # Netra frontend
 
-Responsive React + TypeScript dashboard built with Vite. The overview reads device inventory, DNS analytics, saved audit results, and backend health from the existing Netra API. Device inventory adds local search, classification/source filters, sortable columns, pagination, and device details. LAN discovery and privacy audits are explicit, user-triggered actions. Audit runs evaluate stored inventory/DNS records and save a report; they do not scan the LAN or apply policies. The UI does not create demo data or apply policies.
+Responsive React + TypeScript dashboard built with Vite. The overview reads device inventory, DNS analytics, saved audit results, and backend health from the existing Netra API. Device inventory adds local search, classification/source filters, sortable columns, pagination, and device details. LAN discovery, privacy audits, policy planning, and dry-run evaluations are explicit, user-triggered actions. Audit runs evaluate stored inventory/DNS records; policy planning and dry-run save backend records. None of these actions applies network configuration. The UI does not create demo data.
 
 ## Requirements
 
@@ -57,6 +57,14 @@ audit scopes after explicit user submission. It shows saved reports and the
 finding evidence returned by the API. Audit history has no failed-run records
 or target-device metadata, and the UI does not infer a compromise verdict or
 risk score.
+
+The Policy Planning page explicitly generates persistent policy proposals from
+a saved audit and can create a persistent dry-run plan for selected policies.
+It does not offer policy approval, application, or enforcement. The backend
+does not expose per-policy rationale or targets, durable audit-to-policy
+linkage, or per-policy dry-run attribution; the UI labels those details as
+unavailable instead of inferring them. Repeating policy planning can create
+additional records; the backend does not guarantee deduplication.
 
 Discovery is synchronous, does not report progress, and probes at most 64
 addresses using the backend host's local network context. Its results are
