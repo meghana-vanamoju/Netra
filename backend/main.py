@@ -1,7 +1,16 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
-app = FastAPI(title="Netra API", version="0.1.0")
+from db.session import get_db, init_db
+
+@asynccontextmanager
+async def lifespan(app):
+    init_db()
+    yield
+
+app = FastAPI(title="Netra API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -14,6 +23,11 @@ app.add_middleware(
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "netra-backend", "version": "0.1.0"}
+
+@app.get("/api/db/health")
+def db_health(db=Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
