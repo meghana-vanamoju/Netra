@@ -65,3 +65,12 @@ class PolicyExecution(Base):
     status = Column(String(32), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     details = Column(JSON, nullable=True)
+
+class ConfigSnapshot(Base):
+    __tablename__ = "config_snapshots"
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    backend = Column(String(64), nullable=True)
+    state_json = Column(JSON, nullable=True)
+    checksum = Column(String(128), nullable=True)
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=True)
