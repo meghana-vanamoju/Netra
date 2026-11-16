@@ -25,26 +25,24 @@ Netra aims to:
 ### Implemented
 
 - FastAPI backend foundation.
-- `/api/health` endpoint returning service status.
-- React + TypeScript + Vite frontend scaffold with a basic dark dashboard placeholder.
-- Backend test for the health endpoint.
-- Project structure separating frontend, backend, and (planned) discovery, DNS filtering, audit, policies, benchmarking, and rollback modules.
+- Device inventory, discovery, and classification APIs.
+- DNS analytics, privacy audits, policy planning, enforcement lifecycle, snapshots, recovery, and backend capability APIs.
+- React + TypeScript + Vite frontend with a responsive live dashboard for device inventory, DNS activity, saved audit findings, and backend health.
+- Frontend/backend separation with dedicated backend domain modules.
 
 ### Planned
 
-- LAN device discovery and inventory.
-- Device classification: essential, optional, distracting, privacy-risk.
-- DNS analytics and domain categorization.
-- Audit reports.
-- Dry-run policy planner.
-- Explicit-consent policy application.
+- Full device discovery and inventory management screens.
+- Detailed DNS event and domain views.
+- Audit execution and findings management screens.
+- Policy review, consent, and enforcement controls.
 - Safe DNS filtering integration (via an established filtering engine/provider).
-- Configuration snapshots and rollback.
+- Snapshot and recovery management screens.
 - Before/after benchmarking.
 - Multilingual dashboard (English, Telugu, Hindi, Tamil, Kannada).
 - Exportable reports.
 
-No planned feature is currently operational.
+The dashboard foundation presents existing backend data and connection status. It does not run audits automatically or claim that DNS protection is active.
 
 ## Architecture
 
@@ -52,26 +50,26 @@ No planned feature is currently operational.
 
 - **Frontend:** React, TypeScript, Vite.
 - **Backend:** FastAPI (Python).
-- **Persistence:** SQLite (planned).
-- **Charts:** Recharts (planned).
-- **UI styling:** Tailwind CSS (planned).
+- **Persistence:** SQLite.
+- **UI styling:** Responsive CSS and shared design tokens.
+- **Charts:** Not currently used; dashboard summaries use lightweight CSS.
 - **Localization:** i18next with English, Telugu, Hindi, Tamil, and Kannada (planned).
 
 ### Intended Module Boundaries
 
 - `frontend/` — React + TypeScript + Vite dashboard.
 - `backend/` — FastAPI application and API routes.
-- `backend/discovery/` — LAN device discovery (planned).
+- `backend/discovery/` — LAN device discovery.
+- `backend/dns/` — DNS event analytics.
 - `backend/dns_filter/` — DNS filtering integration (planned).
-- `backend/audit/` — Audit and classification (planned).
-- `backend/policies/` — Policy planning and consent (planned).
+- `backend/audit/` — Privacy audit engine.
+- `backend/policy/` — Policy planning and enforcement support.
 - `backend/benchmarking/` — Before/after measurements (planned).
-- `backend/rollback/` — Snapshots and rollback (planned).
-- `backend/db/` — SQLite persistence (planned).
+- `backend/db/` — SQLite persistence.
 
 Frontend communicates with the backend over HTTP (JSON). DNS filtering will integrate an established filtering engine/provider rather than reimplementing DNS.
 
-All components beyond the foundation are marked as planned.
+The frontend dashboard foundation is implemented; remaining management screens and localization are planned.
 
 ## Safety and Privacy
 
@@ -113,16 +111,19 @@ Planned metrics:
 
 ## Dashboard and Localization
 
-Planned dashboard surfaces:
+Implemented dashboard foundation:
 
 - Device inventory.
 - DNS activity and analytics.
 - Privacy/audit summaries.
-- Policy status.
-- Before/after benchmarks.
-- Configuration snapshot and rollback history.
+- Backend and database health.
+- Responsive desktop, tablet, and mobile layouts.
+
+Remaining dashboard work:
+
+- Policy, enforcement, and recovery management screens.
+- Before/after benchmarks and report export.
 - Languages: English, Telugu, Hindi, Tamil, Kannada.
-- Responsive and accessible UI.
 
 ## Repository Structure
 
@@ -135,18 +136,22 @@ Netra/
 │   ├── requirements.txt
 │   └── test_health.py
 ├── frontend/
+│   ├── README.md
 │   ├── index.html
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── vite.config.ts
 │   └── src/
+│       ├── api.ts
 │       ├── App.tsx
-│       └── main.tsx
+│       ├── main.tsx
+│       ├── styles.css
+│       └── types.ts
 ├── .gitignore
 └── README.md
 ```
 
-Planned additions (not yet present): `backend/db/`, `backend/discovery/`, `backend/dns_filter/`, `backend/audit/`, `backend/policies/`, `backend/benchmarking/`, `backend/rollback/`, `tests/`, `docs/`.
+Additional backend routes and domain modules live under `backend/`; API details are documented in `docs/FRONTEND_API_CONTRACT.md`.
 
 ## Getting Started
 
@@ -177,7 +182,7 @@ npm run dev
 
 Frontend available at `http://localhost:5173`.
 
-Note: Tailwind CSS, Recharts, and i18n are planned and not yet installed.
+Set `VITE_API_BASE_URL` in the frontend environment to use a different backend (default: `http://localhost:8000`). See [frontend/README.md](frontend/README.md) for configuration and execution details.
 
 ### Tests
 
@@ -190,16 +195,16 @@ python3 -m pytest -q
 
 ### Implemented
 
-- `GET /api/health` — returns `{"status": "ok", "service": "netra-backend", "version": "0.1.0"}`.
+- `GET /api/health` and `GET /api/db/health` — service and database health.
+- `GET /api/devices?limit=200` — dashboard device inventory (backend maximum per request: 200).
+- `GET /api/dns/analytics/summary` — DNS event and category totals.
+- `GET /api/audits`, `GET /api/audits/{audit_id}`, and `GET /api/audits/{audit_id}/findings` — latest saved audit and findings; dashboard reads these without starting an audit.
+- `GET /api/backend/capabilities` — DNS backend configuration status, not proof of active enforcement.
 
 ### Planned
 
-- Device inventory endpoints.
-- DNS analytics endpoints.
-- Audit report endpoints.
-- Policy planning/consent endpoints.
-- Benchmarking endpoints.
-- Snapshot/rollback endpoints.
+- Full device, DNS, audit, policy, and recovery management screens.
+- Localization and benchmarking.
 
 ## Roadmap
 

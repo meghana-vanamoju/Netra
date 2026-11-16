@@ -1,0 +1,101 @@
+import type {
+  AuditDetail,
+  AuditFinding,
+  AuditReport,
+  BackendCapabilities,
+  Device,
+  DnsSummary,
+  HealthResponse,
+} from "./types";
+
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const API_BASE_URL = (configuredBaseUrl || "http://localhost:8000").replace(
+  /\/+$/,
+  "",
+);
+
+export class ApiRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
+async function requestJson<T>(path: string): Promise<T> {
+  let response: Response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } catch {
+    const message = controller.signal.aborted
+      ? `The request to ${API_BASE_URL} timed out.`
+      : `Could not connect to ${API_BASE_URL}. Check the backend URL and that the backend is running.`;
+    throw new ApiRequestError(
+      message,
+      0,
+    );
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    let detail = `Request failed with status ${response.status}.`;
+    try {
+      const body: { detail?: unknown } = await response.json();
+      if (typeof body.detail === "string" && body.detail.trim()) {
+        detail = body.detail;
+      }
+    } catch {
+      // Keep the HTTP status message when the server does not return JSON.
+    }
+    throw new ApiRequestError(detail, response.status);
+  }
+
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiRequestError(
+      "The backend returned an invalid JSON response.",
+      response.status,
+    );
+  }
+}
+
+export function getHealth() {
+  return requestJson<HealthResponse>("/api/health");
+}
+
+export function getDatabaseHealth() {
+  return requestJson<{ status: string }>("/api/db/health");
+}
+
+export function getDevices() {
+  return requestJson<Device[]>("/api/devices?limit=200");
+}
+
+export function getDnsSummary() {
+  return requestJson<DnsSummary>("/api/dns/analytics/summary");
+}
+
+export function getAuditReports() {
+  return requestJson<AuditReport[]>("/api/audits");
+}
+
+export function getAudit(auditId: number) {
+  return requestJson<AuditDetail>(`/api/audits/${auditId}`);
+}
+
+export function getAuditFindings(auditId: number) {
+  return requestJson<AuditFinding[]>(`/api/audits/${auditId}/findings`);
+}
+
+export function getBackendCapabilities() {
+  return requestJson<BackendCapabilities>("/api/backend/capabilities");
+}
