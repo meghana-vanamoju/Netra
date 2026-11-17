@@ -28,6 +28,25 @@ The dashboard overview reads these endpoints but does not start an audit,
 modify a policy, or apply network configuration. A configured DNS backend indicates
 configuration only; it does not indicate active enforcement.
 
+## Settings and backend status UI
+
+The read-only Settings & Backend page uses:
+
+| Method and path | Response |
+|---|---|
+| `GET /api/health` | `{ "status": string, "service": string, "version": string }`; `status: "ok"` confirms the API health handler responded. |
+| `GET /api/db/health` | `{ "status": string }`; currently performs a database `SELECT 1` health check. |
+| `GET /api/backend/capabilities` | `{ "configured_backend": string \| null, "available": boolean, "status": string }`. The backend name comes from server-side `NETRA_DNS_BACKEND`; `available` means configured, not operational policy enforcement. |
+
+There is no backend settings read/write API. `NETRA_DNS_BACKEND` must be
+configured outside the dashboard, and the UI has no mutation controls.
+Capability descriptions are based on implemented backend routes: discovery,
+DNS analytics, and policy planning APIs exist; planning and dry-run persist
+records. The policy adapter does not implement enforcement, verification
+currently returns `not_verified`, snapshot rollback is not implemented, and
+the recovery endpoint returns fixed status values without restoring state.
+Service health and database health do not indicate active network protection.
+
 ## Other API families
 
 The backend also exposes device discovery and classification, DNS events and

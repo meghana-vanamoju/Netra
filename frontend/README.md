@@ -75,6 +75,12 @@ implemented, verification reports `not_verified`, and recovery status is a
 fixed backend response. See `../docs/FRONTEND_API_CONTRACT.md` for exact
 schemas and limitations.
 
+The Settings & Backend page reads API health, database health, and the
+configured DNS backend. It exposes no settings mutation controls: the backend
+configuration value comes from server-side `NETRA_DNS_BACKEND`, and there is no
+settings API. Its capability descriptions distinguish implemented read/API
+surfaces from unsupported enforcement and recovery actions.
+
 Discovery is synchronous, does not report progress, and probes at most 64
 addresses using the backend host's local network context. Its results are
 in-memory on the backend; a zero-result response does not prove that a network

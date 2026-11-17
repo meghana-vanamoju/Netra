@@ -17,6 +17,7 @@ import { DnsAnalyticsPage } from "./components/DnsAnalyticsPage";
 import { PrivacyAuditPage } from "./components/PrivacyAuditPage";
 import { PolicyPlanningPage } from "./components/PolicyPlanningPage";
 import { EnforcementRecoveryPage } from "./components/EnforcementRecoveryPage";
+import { SettingsBackendPage } from "./components/SettingsBackendPage";
 import { ErrorMessage, Icon, LoadingValue } from "./components/ui";
 import type {
   ApiError,
@@ -80,6 +81,9 @@ function pageFromHash(): AppPage {
   }
   if (window.location.hash === "#enforcement-recovery") {
     return "enforcement-recovery";
+  }
+  if (window.location.hash === "#settings-backend") {
+    return "settings-backend";
   }
   return "overview";
 }
@@ -215,6 +219,8 @@ function App() {
         <PolicyPlanningPage />
       ) : page === "enforcement-recovery" ? (
         <EnforcementRecoveryPage />
+      ) : page === "settings-backend" ? (
+        <SettingsBackendPage />
       ) : (
       <>
           <div className="page-heading">
