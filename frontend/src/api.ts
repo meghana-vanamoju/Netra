@@ -16,6 +16,7 @@ import type {
   DryRunResult,
   EnforcementStatus,
   HealthResponse,
+  LocalNetworkInfo,
   PolicyDetail,
   PolicyApprovalStatus,
   PolicyExecutionStatus,
@@ -27,10 +28,13 @@ import type {
   SavedDryRunPlan,
   SnapshotDetail,
   SnapshotSummary,
+  RouterCapabilities,
+  RouterDevicesResponse,
+  RouterTestResponse,
 } from "./types";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const API_BASE_URL = (configuredBaseUrl || "http://localhost:8000").replace(
+const API_BASE_URL = (configuredBaseUrl || "http://127.0.0.1:8000").replace(
   /\/+$/,
   "",
 );
@@ -119,6 +123,31 @@ export function runDiscovery(subnet: string) {
     `/api/discovery/run?${query.toString()}`,
     { method: "POST" },
     180_000,
+  );
+}
+
+export function getLocalNetworkInfo() {
+  return requestJson<LocalNetworkInfo>("/api/discovery/network");
+}
+
+export function testRouter(ip: string) {
+  const query = new URLSearchParams({ ip });
+  return requestJson<RouterTestResponse>(`/api/router/test?${query}`, {
+    method: "POST",
+  });
+}
+
+export function getRouterCapabilities(ip: string) {
+  const query = new URLSearchParams({ ip });
+  return requestJson<RouterCapabilities>(`/api/router/capabilities?${query}`);
+}
+
+export function getRouterDevices(ip: string) {
+  const query = new URLSearchParams({ ip });
+  return requestJson<RouterDevicesResponse>(
+    `/api/router/devices?${query}`,
+    { method: "POST" },
+    15_000,
   );
 }
 

@@ -2,11 +2,14 @@
 
 ## Current State
 - Branch: main
-- Latest commit: 7754e42 (feat: add backend capability management)
-- Tests: 24 passed
-- Worktree: clean
-- Orbit: 45 files, 123 definitions
-- Logseq: unresolved failures; pending notes exist
+- Base commit: da295145 (Orbit indexed the final worktree against this HEAD)
+- Router/LAN milestone: implementation and validation complete; awaiting user approval before staging/commit
+- Backend tests: 58 passed
+- Frontend production build: passed
+- Physical evidence: current interface/gateway and passive neighbor state recorded; no active host scan or router management request
+- Orbit: 126 files, 1,111 definitions, 548 imports, 2,815 relationships; 0 skipped/errored; current-index MCP retrieval succeeded
+- Logseq: pages updated locally; MCP retrieval tool unavailable in this environment
+- AdGuard config/filter files are present in the staged diff and excluded from this milestone; they contain local data and an account password hash
 
 ## Completed Milestones
 | ID | Name | Status | Commit |
@@ -22,6 +25,7 @@
 | 0.9 | Consent & Enforcement Adapter | completed | 843f9a1 |
 | 1.0 | Configuration Snapshots & Rollback | completed | fbdc292 |
 | 1.1 | Backend Capability Management | completed | 7754e42 |
+| 1.1.1 | Router IP Integration & Connected Device Discovery | implementation and verification complete; commit pending | current milestone |
 
 ## Pending
 - 1.2 DNS Enforcement Integration

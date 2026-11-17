@@ -1,6 +1,6 @@
 # Netra Frontend API Contract
 
-The frontend uses `http://localhost:8000` by default. Configure another origin
+The frontend uses `http://127.0.0.1:8000` by default. Configure another origin
 with `VITE_API_BASE_URL`. The backend must allow the frontend origin through
 CORS.
 
@@ -60,17 +60,28 @@ verification, and recovery APIs.
 | `GET /api/devices?limit=200&offset=0` | Array of device records; the UI searches and paginates the returned first 200 locally. |
 | `GET /api/classifications` | Array of `{ "device_id": number, "category": string, "confidence": number, "reasons": string[], "vendor_identified": boolean }`. |
 | `POST /api/devices/{device_id}/classify` | Recalculates and returns one device's classification; it does not persist the result. The UI only calls this after the user requests recalculation in device details. |
-| `POST /api/discovery/run?subnet={cidr}` | `{ "discovered": number, "subnet": string }`. Validates that the subnet is private, then synchronously scans and registers discoveries in the inventory. |
-| `GET /api/discovery/results` | Most recent in-memory discovery results: an array of `{ "ip_address": string, "mac_address": string \| null, "hostname": string \| null, "discovery_source": string }`. |
+| `POST /api/discovery/run?subnet={cidr}` | `{ "discovered": number, "subnet": string }`. Requires a private IPv4 subnet within the active network or `NETRA_AUTHORIZED_CIDRS`, capped at `/16`, then synchronously scans and registers discoveries. |
+| `GET /api/discovery/network` | `{ "interface": string \| null, "ip_address": string \| null, "gateway": string \| null, "subnet": string \| null }`; reads the active default route and interface address when Linux `ip` is available. |
+| `POST /api/router/test?ip={ipv4}` | `{ "ip": string, "reachable": boolean, "network_reachable": boolean, "management_interface_available": boolean }`; `reachable` means local neighbor evidence only, not management support. |
+| `GET /api/router/capabilities?ip={ipv4}` | Reports implemented capabilities and whether an exact-IP AdGuard Home adapter is configured. Generic open ports do not imply router support. |
+| `POST /api/router/devices?ip={ipv4}` | `{ "router_ip": string, "status": string, "authentication_required": boolean \| string, "devices": [...] }`; uses only explicitly configured AdGuard Home built-in DHCP leases. Successful records update the device inventory. |
+| `GET /api/discovery/results` | Latest in-memory LAN results merged with the most recent router records. Each record includes `ip_address`, nullable `mac_address`/`hostname`, `discovery_source`, and merged `sources`. |
 
-Discovery only runs after the user submits a private subnet in the LAN
-discovery screen. The backend probes up to 64 host addresses and reads its
-local ARP table; it provides no progress stream, scan history, or permission
-diagnostic. Results are process-local and may be lost on backend restart. A
-zero result is not proof that the subnet has no devices. A discovery success
-response confirms the endpoint completed and returned a count, not complete
-network coverage. The UI limits CIDR ranges to private IPv4 networks no larger
-than `/16`, avoiding excessively large ranges for this synchronous endpoint.
+Discovery only runs after a user action. The backend probes at most 64 host
+addresses inside the selected authorized private subnet and reads its local
+neighbor table. Current results are process-local and may be lost on backend
+restart; persistent device records remain available through `/api/devices`. A
+zero result is not proof that the subnet has no devices. Client isolation,
+permissions, and host firewall behavior can limit visibility. Configure
+`NETRA_AUTHORIZED_CIDRS` on the backend to allow private networks other than
+the active interface subnet.
+
+The supported router adapter is restricted to AdGuard Home's documented
+`GET /control/dhcp/status` API. It maps dynamic/static lease IP, MAC, hostname,
+and expiry; vendor, online state, and last seen are unknown unless another
+source provides evidence. Other router models are reported unsupported. See
+[Router Integration Architecture](ROUTER_INTEGRATION_ARCHITECTURE.md) and
+[Router Compatibility](ROUTER_COMPATIBILITY.md).
 
 Classification is read from the existing endpoint and is not persisted or
 changed by this UI. `Unknown` remains an explicit category when the backend

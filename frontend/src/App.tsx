@@ -118,9 +118,9 @@ function App() {
     const audit =
       auditList.status === "fulfilled" && auditList.value.length > 0
         ? await Promise.allSettled([
-            getAudit(auditList.value[0].id),
-            getAuditFindings(auditList.value[0].id),
-          ])
+          getAudit(auditList.value[0].id),
+          getAuditFindings(auditList.value[0].id),
+        ])
         : null;
 
     setData({
@@ -147,22 +147,22 @@ function App() {
             ? { status: "ready", data: null }
             : audit?.[0].status === "fulfilled" && audit[1].status === "fulfilled"
               ? {
-                  status: "ready",
-                  data: {
-                    report: {
-                      ...audit[0].value,
-                      created_at: auditList.value[0].created_at,
-                    },
-                    findings: audit[1].value,
+                status: "ready",
+                data: {
+                  report: {
+                    ...audit[0].value,
+                    created_at: auditList.value[0].created_at,
                   },
-                }
-                : {
-                    status: "error",
-                    error: toApiError(
-                      audit?.find((result) => result.status === "rejected")?.reason ??
-                        new Error("Unable to load the latest audit."),
-                    ),
-                  },
+                  findings: audit[1].value,
+                },
+              }
+              : {
+                status: "error",
+                error: toApiError(
+                  audit?.find((result) => result.status === "rejected")?.reason ??
+                  new Error("Unable to load the latest audit."),
+                ),
+              },
       capabilities:
         capabilities.status === "fulfilled"
           ? { status: "ready", data: capabilities.value }
@@ -180,6 +180,13 @@ function App() {
     window.addEventListener("hashchange", syncPage);
     return () => window.removeEventListener("hashchange", syncPage);
   }, []);
+
+  useEffect(() => {
+    const refreshInventory = () => void loadDashboard();
+    window.addEventListener("netra:inventory-updated", refreshInventory);
+    return () =>
+      window.removeEventListener("netra:inventory-updated", refreshInventory);
+  }, [loadDashboard]);
 
   const apiOnline =
     data.health.status === "ready" && data.health.data.status === "ok";
@@ -222,7 +229,7 @@ function App() {
       ) : page === "settings-backend" ? (
         <SettingsBackendPage />
       ) : (
-      <>
+        <>
           <div className="page-heading">
             <div>
               <div className="eyebrow"><span className="eyebrow-line" /> NETWORK OVERVIEW</div>
@@ -536,7 +543,7 @@ function App() {
             <span><span className="footer-brand-mark"><Icon name="router" size={14} /></span> NETRA <span className="footer-separator">·</span> SEE YOUR NETWORK CLEARLY. PROTECT IT SAFELY.</span>
             <span>Dashboard data is fetched from your backend. No demo data shown.</span>
           </footer>
-      </>
+        </>
       )}
     </AppShell>
   );

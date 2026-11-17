@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime
 
@@ -8,8 +9,10 @@ from schemas import DeviceCreate, DeviceOut
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
+
 def _norm(v):
     return v.strip().lower() if v else None
+
 
 @router.get("", response_model=list[DeviceOut])
 def list_devices(
@@ -29,6 +32,7 @@ def list_devices(
         q = q.filter(Device.vendor == vendor)
     return q.offset(offset).limit(limit).all()
 
+
 @router.get("/{device_id}", response_model=DeviceOut)
 def get_device(device_id: int, db: Session = Depends(get_db)):
     d = db.get(Device, device_id)
@@ -36,22 +40,37 @@ def get_device(device_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Device not found")
     return d
 
+
 @router.post("", response_model=DeviceOut, status_code=201)
 def register_device(payload: DeviceCreate, db: Session = Depends(get_db)):
     mac = _norm(payload.mac_address)
     # identity matching: prefer MAC if available
     existing = None
     if mac:
-        existing = db.query(Device).filter(Device.mac_address == mac).first()
+        existing = (
+            db.query(Device)
+            .filter(func.upper(Device.mac_address) == mac.upper())
+            .first()
+        )
     if not existing and payload.ip_address:
-        existing = db.query(Device).filter(Device.ip_address == payload.ip_address.strip()).first()
+        existing = (
+            db.query(Device)
+            .filter(Device.ip_address == payload.ip_address.strip())
+            .first()
+        )
 
     if existing:
         existing.ip_address = payload.ip_address.strip()
         existing.mac_address = mac or existing.mac_address
-        existing.hostname = payload.hostname if payload.hostname is not None else existing.hostname
-        existing.vendor = payload.vendor if payload.vendor is not None else existing.vendor
-        existing.discovery_source = payload.discovery_source or existing.discovery_source
+        existing.hostname = (
+            payload.hostname if payload.hostname is not None else existing.hostname
+        )
+        existing.vendor = (
+            payload.vendor if payload.vendor is not None else existing.vendor
+        )
+        existing.discovery_source = (
+            payload.discovery_source or existing.discovery_source
+        )
         if payload.metadata is not None:
             existing.extra = payload.metadata
         existing.last_seen = datetime.utcnow()
@@ -71,6 +90,7 @@ def register_device(payload: DeviceCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(d)
     return d
+
 
 @router.delete("/{device_id}", status_code=204)
 def delete_device(device_id: int, db: Session = Depends(get_db)):

@@ -25,10 +25,10 @@ python3 -m uvicorn main:app --reload
 
 ## Configuration
 
-The API client defaults to `http://localhost:8000`. To use another backend, create `frontend/.env.local`:
+The API client defaults to `http://127.0.0.1:8000` because the local backend is bound to IPv4 loopback. To use another backend, create `frontend/.env.local`:
 
 ```dotenv
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
 Restart Vite after changing environment variables. The backend must allow the frontend's origin through CORS.

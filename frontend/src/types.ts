@@ -38,11 +38,45 @@ export type DiscoveryResult = {
   mac_address: string | null;
   hostname: string | null;
   discovery_source: string;
+  sources?: string[];
 };
 
 export type DiscoveryResponse = {
   discovered: number;
   subnet: string;
+};
+
+export type LocalNetworkInfo = {
+  interface: string | null;
+  ip_address: string | null;
+  gateway: string | null;
+  subnet: string | null;
+};
+
+export type RouterTestResponse = {
+  ip: string;
+  reachable: boolean;
+  network_reachable: boolean;
+  management_interface_available: boolean;
+};
+
+export type RouterCapabilities = {
+  router_ip: string;
+  network_reachable: boolean;
+  management_interface_available: boolean;
+  reachable: boolean;
+  dhcp_leases: string;
+  connected_devices: string;
+  management_protocols: string[];
+  authentication_required: string;
+  adguard_home_configured?: boolean;
+};
+
+export type RouterDevicesResponse = {
+  router_ip: string;
+  status: "available" | "unsupported" | "authentication_required" | "access_denied" | "timeout" | "error";
+  authentication_required: boolean | string;
+  devices: DiscoveryResult[];
 };
 
 export type DnsSummary = {

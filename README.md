@@ -170,7 +170,7 @@ python3 -m pip install -r requirements.txt
 python3 -m uvicorn main:app --reload
 ```
 
-API available at `http://localhost:8000`. Health check: `GET /api/health`.
+API available at `http://127.0.0.1:8000`. Health check: `GET /api/health`.
 
 ### Frontend Setup
 
@@ -182,7 +182,7 @@ npm run dev
 
 Frontend available at `http://localhost:5173`.
 
-Set `VITE_API_BASE_URL` in the frontend environment to use a different backend (default: `http://localhost:8000`). See [frontend/README.md](frontend/README.md) for configuration and execution details.
+Set `VITE_API_BASE_URL` in the frontend environment to use a different backend (default: `http://127.0.0.1:8000`). See [frontend/README.md](frontend/README.md) for configuration and execution details.
 
 ### Tests
 

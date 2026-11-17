@@ -1,11 +1,9 @@
-import ipaddress, socket
+from discovery.service import is_authorized_router_ip
+
 
 def validate_router_ip(ip):
-    try:
-        ipaddress.ip_address(ip)
-        return True
-    except ValueError:
-        return False
+    return is_authorized_router_ip(ip)
+
 
 def arp_present(ip):
     try:
@@ -17,20 +15,20 @@ def arp_present(ip):
         pass
     return False
 
+
 class RouterAdapter:
     def __init__(self, ip):
         self.ip = ip
+
     def network_reachable(self):
         return arp_present(self.ip)
+
     def management_interface_available(self):
-        try:
-            socket.create_connection((self.ip, 80), timeout=1)
-            return True
-        except Exception:
-            return False
+        return False
+
     def reachable(self):
-        # Backwards-compatible: network presence OR management port
-        return self.network_reachable() or self.management_interface_available()
+        return self.network_reachable()
+
     def capabilities(self):
         return {
             "router_ip": self.ip,
@@ -38,6 +36,8 @@ class RouterAdapter:
             "management_interface_available": self.management_interface_available(),
             "reachable": self.reachable(),
             "dhcp_leases": "unsupported",
+            "connected_devices": "unsupported",
+            "management_protocols": [],
             "dns_logs": "unsupported",
             "authentication_required": "unknown",
         }
