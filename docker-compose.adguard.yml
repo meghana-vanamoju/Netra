@@ -2,7 +2,7 @@ services:
   adguardhome:
     image: adguard/adguardhome:v0.107.50
     ports:
-      - "3001:3000"
+      - "3001:80"
       - "53:53/udp"
     volumes:
       - ./adguard-work:/opt/adguardhome/work
