@@ -7,6 +7,7 @@ import {
   getDnsSummary,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   Device,
@@ -55,15 +56,18 @@ function CategoryBreakdown({ summary }: { summary: DnsSummary }) {
 
   if (entries.length === 0 || total === 0) {
     return (
+      <LocalizedTree>
       <div className="dns-empty-inline">
         <span className="empty-icon"><Icon name="pulse" size={19} /></span>
         <strong>No categorized DNS events</strong>
         <span>Category totals will appear when the backend has recorded DNS events.</span>
       </div>
+      </LocalizedTree>
     );
   }
 
   return (
+    <LocalizedTree>
     <div className="dns-category-list">
       {entries.map(([category, count]) => {
         const percent = (count / total) * 100;
@@ -93,6 +97,7 @@ function CategoryBreakdown({ summary }: { summary: DnsSummary }) {
         means no rule matched; it is not a maliciousness verdict.
       </p>
     </div>
+    </LocalizedTree>
   );
 }
 
@@ -275,6 +280,7 @@ export function DnsAnalyticsPage() {
   const maxDeviceCount = Math.max(1, ...deviceEntries.map((entry) => entry.count));
 
   return (
+    <LocalizedTree>
     <section className="dns-page">
       <div className="page-heading">
         <div>
@@ -417,10 +423,21 @@ export function DnsAnalyticsPage() {
                     return (
                       <div className="dns-device-row" key={entry.device_id ?? "unlinked"}>
                         <div className="dns-device-title">
-                          <span>{title}</span>
+                          <span
+                            data-no-translate={
+                              entry.device_id !== null &&
+                              Boolean(device?.hostname || device?.ip_address)
+                                ? "true"
+                                : undefined
+                            }
+                          >
+                            {title}
+                          </span>
                           {entry.device_id !== null && (
                             <span className="dns-device-subtitle">
-                              {device?.ip_address || `Device #${entry.device_id}`}
+                              {device?.ip_address
+                                ? <span data-no-translate="true">{device.ip_address}</span>
+                                : `Device #${entry.device_id}`}
                             </span>
                           )}
                         </div>
@@ -495,7 +512,7 @@ export function DnsAnalyticsPage() {
                 <tbody>
                   {domainMatches.map((entry) => (
                     <tr key={entry.domain}>
-                      <td className="dns-domain-name">{entry.domain}</td>
+                      <td className="dns-domain-name" data-no-translate="true">{entry.domain}</td>
                       <td>
                         <span className={`dns-category-pill ${categoryClass(entry.category)}`}>
                           {entry.category || "Unknown"}
@@ -589,7 +606,7 @@ export function DnsAnalyticsPage() {
                     return (
                       <tr key={event.id}>
                         <td className="last-seen">{formatTime(event.timestamp)}</td>
-                        <td className="dns-domain-name">{event.domain}</td>
+                        <td className="dns-domain-name" data-no-translate="true">{event.domain}</td>
                         <td>
                           <span className={`dns-category-pill ${categoryClass(event.category)}`}>
                             {event.category || "Unknown"}
@@ -604,7 +621,9 @@ export function DnsAnalyticsPage() {
                               type="button"
                               onClick={() => selectDeviceEvents(event.device_id)}
                             >
-                              {deviceLabel}
+                              {device?.hostname || device?.ip_address
+                                ? <span data-no-translate="true">{deviceLabel}</span>
+                                : deviceLabel}
                             </button>
                           )}
                         </td>
@@ -647,5 +666,6 @@ export function DnsAnalyticsPage() {
         </div>
       </section>
     </section>
+    </LocalizedTree>
   );
 }

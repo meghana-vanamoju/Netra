@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { Icon } from "./ui";
+import { LanguageSelector, LocalizedTree } from "../localization";
 import "../styles.css";
 
 export type AppPage =
@@ -78,6 +79,7 @@ export function AppShell({
             : "Overview";
 
   return (
+    <LocalizedTree>
     <div className="app-shell">
       <aside className="sidebar">
         <a
@@ -137,6 +139,7 @@ export function AppShell({
             <strong>{pageLabel}</strong>
           </div>
           <div className="topbar-actions">
+            <LanguageSelector />
             <div
               className={`api-indicator${apiOnline ? "" : apiChecking ? " checking" : " offline"}`}
               role="status"
@@ -192,5 +195,6 @@ export function AppShell({
         </main>
       </div>
     </div>
+    </LocalizedTree>
   );
 }

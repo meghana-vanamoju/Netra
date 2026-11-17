@@ -12,6 +12,7 @@ import {
   getSnapshots,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   EnforcementStatus,
@@ -83,6 +84,7 @@ function PolicyStatusCard({
   children: ReactNode;
 }) {
   return (
+    <LocalizedTree>
     <article className="panel enforcement-status-card">
       <div className="panel-header">
         <h3>{title}</h3>
@@ -100,6 +102,7 @@ function PolicyStatusCard({
         children
       )}
     </article>
+    </LocalizedTree>
   );
 }
 
@@ -113,11 +116,16 @@ function PolicyStatusDetails({
   const policyLabel = policy.name || `Policy #${policy.id}`;
 
   return (
+    <LocalizedTree>
     <section className="panel enforcement-policy-panel">
       <div className="panel-header enforcement-policy-header">
         <div>
           <div className="panel-kicker">SELECTED POLICY · #{policy.id}</div>
-          <h2>{policyLabel}</h2>
+          <h2>
+            {policy.name
+              ? <span data-no-translate="true">{policy.name}</span>
+              : policyLabel}
+          </h2>
         </div>
         <span className="policy-status policy-status-unknown">
           {policy.status || "Status unknown"}
@@ -216,6 +224,7 @@ function PolicyStatusDetails({
         </PolicyStatusCard>
       </div>
     </section>
+    </LocalizedTree>
   );
 }
 
@@ -387,6 +396,7 @@ export function EnforcementRecoveryPage() {
   );
 
   return (
+    <LocalizedTree>
     <section className="enforcement-page">
       <div className="page-heading">
         <div>
@@ -500,7 +510,9 @@ export function EnforcementRecoveryPage() {
               <select value={policyId} onChange={(event) => setPolicyId(event.target.value)}>
                 {policies.data.map((policy) => (
                   <option value={policy.id} key={policy.id}>
-                    {policy.name || "Unnamed policy"} · #{policy.id} · {policy.status || "Unknown status"}
+                    {policy.name
+                      ? <span data-no-translate="true">{policy.name}</span>
+                      : "Unnamed policy"} · #{policy.id} · {policy.status || "Unknown status"}
                   </option>
                 ))}
               </select>
@@ -592,5 +604,6 @@ export function EnforcementRecoveryPage() {
         The backend's policy apply path returns failure even when a backend is configured. Snapshot rollback returns “not_implemented” for configured backends, and verification currently reports “not_verified”. Recovery status is a fixed report, not a recovery operation. No enforcement, restoration, or active protection is claimed by this page.
       </div>
     </section>
+    </LocalizedTree>
   );
 }

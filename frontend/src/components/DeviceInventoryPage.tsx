@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyDevice, getClassifications, getDevices } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   Device,
@@ -73,6 +74,7 @@ function DeviceDetails({
   }, []);
 
   return (
+    <LocalizedTree>
     <dialog
       className="device-dialog"
       ref={dialogRef}
@@ -93,7 +95,9 @@ function DeviceDetails({
         <div>
           <div className="panel-kicker">DEVICE DETAILS</div>
           <h2 id="device-dialog-title">
-            {device.hostname || device.vendor || device.ip_address}
+            <span data-no-translate="true">
+              {device.hostname || device.vendor || device.ip_address}
+            </span>
           </h2>
         </div>
         <button
@@ -109,11 +113,11 @@ function DeviceDetails({
       <section className="dialog-section" aria-labelledby="identity-title">
         <h3 id="identity-title">Identity</h3>
         <dl className="detail-list">
-          <div><dt>Hostname</dt><dd>{device.hostname || "Not reported"}</dd></div>
-          <div><dt>IP address</dt><dd>{device.ip_address}</dd></div>
-          <div><dt>MAC address</dt><dd>{device.mac_address || "Not reported"}</dd></div>
-          <div><dt>Vendor</dt><dd>{device.vendor || "Not reported"}</dd></div>
-          <div><dt>Discovery source</dt><dd>{device.discovery_source || "Not reported"}</dd></div>
+          <div><dt>Hostname</dt><dd>{device.hostname ? <span data-no-translate="true">{device.hostname}</span> : "Not reported"}</dd></div>
+          <div><dt>IP address</dt><dd><span data-no-translate="true">{device.ip_address}</span></dd></div>
+          <div><dt>MAC address</dt><dd>{device.mac_address ? <span data-no-translate="true">{device.mac_address}</span> : "Not reported"}</dd></div>
+          <div><dt>Vendor</dt><dd>{device.vendor ? <span data-no-translate="true">{device.vendor}</span> : "Not reported"}</dd></div>
+          <div><dt>Discovery source</dt><dd>{device.discovery_source ? <span data-no-translate="true">{device.discovery_source}</span> : "Not reported"}</dd></div>
           <div><dt>First seen</dt><dd>{displayDate(device.first_seen)}</dd></div>
           <div><dt>Last seen</dt><dd>{displayDate(device.last_seen)}</dd></div>
         </dl>
@@ -151,7 +155,7 @@ function DeviceDetails({
             </div>
             {classification.reasons.length > 0 ? (
               <ul className="evidence-list">
-                {classification.reasons.map((reason) => <li key={reason}>{reason}</li>)}
+                {classification.reasons.map((reason) => <li data-no-translate="true" key={reason}>{reason}</li>)}
               </ul>
             ) : (
               <p className="muted-copy">The backend did not provide classification evidence.</p>
@@ -170,12 +174,13 @@ function DeviceDetails({
       <section className="dialog-section" aria-labelledby="metadata-title">
         <h3 id="metadata-title">Additional metadata</h3>
         {device.metadata && Object.keys(device.metadata).length > 0 ? (
-          <pre className="metadata-block">{JSON.stringify(device.metadata, null, 2)}</pre>
+          <pre className="metadata-block" data-no-translate="true">{JSON.stringify(device.metadata, null, 2)}</pre>
         ) : (
           <p className="muted-copy">No additional metadata was recorded.</p>
         )}
       </section>
     </dialog>
+    </LocalizedTree>
   );
 }
 
@@ -358,6 +363,7 @@ export function DeviceInventoryPage() {
   };
 
   return (
+    <LocalizedTree>
     <section className="inventory-page">
       <div className="page-heading">
         <div>
@@ -463,12 +469,12 @@ export function DeviceInventoryPage() {
                         <td>
                           <span className="device-name-cell">
                             <span className="device-avatar"><Icon name="devices" size={16} /></span>
-                            <span><strong>{device.hostname || "Unknown device"}</strong><small>Device #{device.id}</small></span>
+                            <span><strong>{device.hostname ? <span data-no-translate="true">{device.hostname}</span> : "Unknown device"}</strong><small>Device #{device.id}</small></span>
                           </span>
                         </td>
-                        <td className="ip-address">{device.ip_address}</td>
-                        <td className="ip-address">{device.mac_address || "—"}</td>
-                        <td>{device.vendor || "—"}</td>
+                        <td className="ip-address"><span data-no-translate="true">{device.ip_address}</span></td>
+                        <td className="ip-address">{device.mac_address ? <span data-no-translate="true">{device.mac_address}</span> : "—"}</td>
+                        <td>{device.vendor ? <span data-no-translate="true">{device.vendor}</span> : "—"}</td>
                         <td>
                           <span className={`classification-pill${classification?.category === "Unknown" ? " is-unknown" : ""}`}>
                             {classifications.status === "error"
@@ -572,5 +578,6 @@ export function DeviceInventoryPage() {
         />
       )}
     </section>
+    </LocalizedTree>
   );
 }

@@ -95,3 +95,13 @@ npm run preview
 ```
 
 There is not yet a frontend test runner configured in this scaffold.
+
+## Languages
+
+The interface supports English (default), Telugu, Hindi, Tamil, and Kannada.
+Choose a language from the selector in the application header; the selection is
+stored in the browser's `localStorage` under `netra.language`. The built-in
+localization provider uses English text when a catalog entry is unavailable and
+does not translate device names, network identifiers, domain names, or API
+values. No localization dependency or font package is required; Indic text uses
+system font fallbacks.

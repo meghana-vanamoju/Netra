@@ -419,7 +419,7 @@ function App() {
                       {findings.slice(0, 3).map((finding) => (
                         <div className="finding-row" key={finding.id}>
                           <span className={`severity-dot severity-${finding.severity.toLowerCase()}`} />
-                          <span>{finding.title}</span>
+                          <span data-no-translate="true">{finding.title}</span>
                           <span className="finding-severity">{finding.severity}</span>
                         </div>
                       ))}
@@ -466,7 +466,18 @@ function App() {
                           <td>
                             <span className="device-name-cell">
                               <span className="device-avatar"><Icon name="devices" size={16} /></span>
-                              <span><strong>{device.hostname || device.vendor || "Unknown device"}</strong><small>{device.vendor || device.discovery_source || "Device"}</small></span>
+                              <span>
+                                <strong>
+                                  {device.hostname || device.vendor
+                                    ? <span data-no-translate="true">{device.hostname || device.vendor}</span>
+                                    : "Unknown device"}
+                                </strong>
+                                <small>
+                                  {device.vendor || device.discovery_source
+                                    ? <span data-no-translate="true">{device.vendor || device.discovery_source}</span>
+                                    : "Device"}
+                                </small>
+                              </span>
                             </span>
                           </td>
                           <td className="ip-address">{device.ip_address}</td>

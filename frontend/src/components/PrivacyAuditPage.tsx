@@ -7,6 +7,7 @@ import {
   runAudit,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   AuditDetail,
@@ -49,8 +50,17 @@ function deviceLabel(deviceId: number | null, devicesById: Map<number, Device>) 
   const device = devicesById.get(deviceId);
   const identity = device?.hostname || device?.ip_address;
   return identity
-    ? `${identity} · Device #${deviceId}`
-    : `Device #${deviceId} · identity unavailable`;
+    ? (
+        <>
+          <span data-no-translate="true">{identity}</span> ·{" "}
+          <span>{`Device #${deviceId}`}</span>
+        </>
+      )
+    : (
+        <>
+          <span>{`Device #${deviceId}`}</span> · identity unavailable
+        </>
+      );
 }
 
 function severityClass(severity: string) {
@@ -67,11 +77,13 @@ function FindingsList({
 }) {
   if (findings.length === 0) {
     return (
+      <LocalizedTree>
       <div className="audit-empty-state">
         <span className="empty-icon"><Icon name="check" size={19} /></span>
         <strong>No findings reported</strong>
         <span>This completed audit returned an empty findings list.</span>
       </div>
+      </LocalizedTree>
     );
   }
 
@@ -89,6 +101,7 @@ function FindingsList({
   });
 
   return (
+    <LocalizedTree>
     <div className="audit-findings-list">
       {severityKeys.map((severity) => (
         <section className="audit-severity-group" key={severity}>
@@ -103,11 +116,13 @@ function FindingsList({
                 <span className={`audit-severity-tag ${severityClass(finding.severity)}`}>
                   {finding.severity || "Unknown"}
                 </span>
-                <span className="audit-finding-title">{finding.title || "Untitled finding"}</span>
+                <span className="audit-finding-title">
+                  {finding.title ? <span data-no-translate="true">{finding.title}</span> : "Untitled finding"}
+                </span>
                 <span className="audit-rule-tag">{finding.detection_rule || "Rule not provided"}</span>
               </summary>
               <div className="audit-finding-body">
-                <p>{finding.description || "Description not provided by the audit result."}</p>
+                <p>{finding.description ? <span data-no-translate="true">{finding.description}</span> : "Description not provided by the audit result."}</p>
                 <dl className="audit-finding-meta">
                   <div>
                     <dt>Device</dt>
@@ -126,7 +141,7 @@ function FindingsList({
                   <h4>Evidence</h4>
                   {finding.evidence?.length ? (
                     <ul>
-                      {finding.evidence.map((item, index) => <li key={`${finding.id}-evidence-${index}`}>{item}</li>)}
+                      {finding.evidence.map((item, index) => <li data-no-translate="true" key={`${finding.id}-evidence-${index}`}>{item}</li>)}
                     </ul>
                   ) : (
                     <p className="audit-unknown-evidence">No evidence details were included in this finding.</p>
@@ -134,7 +149,7 @@ function FindingsList({
                 </div>
                 <div className="audit-next-step">
                   <h4>Recommended next step</h4>
-                  <p>{finding.recommended_next_step || "Not provided by the audit result."}</p>
+                  <p>{finding.recommended_next_step ? <span data-no-translate="true">{finding.recommended_next_step}</span> : "Not provided by the audit result."}</p>
                 </div>
               </div>
             </details>
@@ -142,6 +157,7 @@ function FindingsList({
         </section>
       ))}
     </div>
+    </LocalizedTree>
   );
 }
 
@@ -273,6 +289,7 @@ export function PrivacyAuditPage() {
   };
 
   return (
+    <LocalizedTree>
     <section className="audit-page">
       <div className="page-heading">
         <div>
@@ -374,7 +391,7 @@ export function PrivacyAuditPage() {
                   </option>
                   {devices.status === "ready" && devices.data.map((device) => (
                     <option value={device.id} key={device.id}>
-                      {device.hostname || "Unknown hostname"} · {device.ip_address} · #{device.id}
+                      {device.hostname ? <span data-no-translate="true">{device.hostname}</span> : "Unknown hostname"} · <span data-no-translate="true">{device.ip_address}</span> · #{device.id}
                     </option>
                   ))}
                 </select>
@@ -569,5 +586,6 @@ export function PrivacyAuditPage() {
         The API reports findings, not a compromise verdict or risk score. An empty result means no findings were returned by this audit run; it is not a guarantee of safety. Historical audit metadata does not include the target device ID or failed-run records.
       </p>
     </section>
+    </LocalizedTree>
   );
 }

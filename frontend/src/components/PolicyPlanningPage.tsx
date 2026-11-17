@@ -10,6 +10,7 @@ import {
   runPolicyDryRun,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   AuditFinding,
@@ -279,6 +280,7 @@ export function PolicyPlanningPage() {
   };
 
   return (
+    <LocalizedTree>
     <section className="policy-page">
       <div className="page-heading">
         <div>
@@ -448,7 +450,11 @@ export function PolicyPlanningPage() {
                       disabled={dryRunning}
                     />
                     <span className="policy-select-copy">
-                      <strong>{row.summary.name || `Policy #${row.summary.id}`}</strong>
+                      <strong>
+                        {row.summary.name
+                          ? <span data-no-translate="true">{row.summary.name}</span>
+                          : `Policy #${row.summary.id}`}
+                      </strong>
                       <span>
                         #{row.summary.id} · {row.summary.risk || "Risk unavailable"}
                       </span>
@@ -600,7 +606,11 @@ export function PolicyPlanningPage() {
               <tbody>
                 {policies.data.map((row) => (
                   <tr key={row.summary.id}>
-                    <td className="policy-name-cell">{row.summary.name || "Name unavailable"}</td>
+                    <td className="policy-name-cell">
+                      {row.summary.name
+                        ? <span data-no-translate="true">{row.summary.name}</span>
+                        : "Name unavailable"}
+                    </td>
                     <td>#{row.summary.id}</td>
                     <td>{row.summary.risk || "Unknown"}</td>
                     <td>
@@ -639,5 +649,6 @@ export function PolicyPlanningPage() {
         Policy summaries do not expose descriptions, targets, or generation rationale; policy detail does not expose a target or audit linkage. Dry-run responses report aggregate counts without per-policy attribution. The saved plan endpoints are used only to confirm that the explicitly created plan can be read back. No policies are approved, applied, or enforced here.
       </p>
     </section>
+    </LocalizedTree>
   );
 }

@@ -6,6 +6,7 @@ import {
   runDiscovery,
 } from "../api";
 import { ErrorMessage, Icon } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   Device,
@@ -84,6 +85,7 @@ export function DiscoveryPage() {
   };
 
   return (
+    <LocalizedTree>
     <section className="discovery-page">
       <div className="page-heading">
         <div>
@@ -195,10 +197,10 @@ export function DiscoveryPage() {
                 <tbody>
                   {results.data.map((device, index) => (
                     <tr key={`${device.ip_address}-${device.mac_address ?? index}`}>
-                      <td>{device.hostname || "Not resolved"}</td>
-                      <td className="ip-address">{device.ip_address}</td>
-                      <td className="ip-address">{device.mac_address || "Not reported"}</td>
-                      <td>{device.discovery_source || "Not reported"}</td>
+                      <td>{device.hostname ? <span data-no-translate="true">{device.hostname}</span> : "Not resolved"}</td>
+                      <td className="ip-address"><span data-no-translate="true">{device.ip_address}</span></td>
+                      <td className="ip-address">{device.mac_address ? <span data-no-translate="true">{device.mac_address}</span> : "Not reported"}</td>
+                      <td>{device.discovery_source ? <span data-no-translate="true">{device.discovery_source}</span> : "Not reported"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -230,5 +232,6 @@ export function DiscoveryPage() {
         </div>
       )}
     </section>
+    </LocalizedTree>
   );
 }

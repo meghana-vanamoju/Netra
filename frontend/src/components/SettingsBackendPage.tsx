@@ -5,6 +5,7 @@ import {
   getHealth,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
+import { LocalizedTree } from "../localization";
 import type {
   ApiError,
   BackendCapabilities,
@@ -52,15 +53,21 @@ function StatusValue({
   unavailable?: string;
 }) {
   if (state.status === "loading") {
-    return <span className="settings-loading"><LoadingValue /> Checking…</span>;
+    return (
+      <LocalizedTree>
+        <span className="settings-loading"><LoadingValue /> Checking…</span>
+      </LocalizedTree>
+    );
   }
   if (state.status === "error") {
     return <ErrorMessage error={state.error} />;
   }
   return (
+    <LocalizedTree>
     <span className={`settings-status ${statusStyle(ok ?? null)}`}>
       {value ?? unavailable}
     </span>
+    </LocalizedTree>
   );
 }
 
@@ -176,6 +183,7 @@ export function SettingsBackendPage() {
       : null;
 
   return (
+    <LocalizedTree>
     <section className="settings-page">
       <div className="page-heading">
         <div>
@@ -335,5 +343,6 @@ export function SettingsBackendPage() {
         No configuration values are editable here. API availability, database health, and a configured DNS backend are separate facts; none confirms active protection.
       </p>
     </section>
+    </LocalizedTree>
   );
 }

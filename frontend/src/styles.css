@@ -30,6 +30,34 @@ body {
   background: var(--canvas);
 }
 
+html[lang="te"] body,
+html[lang="te"] button,
+html[lang="te"] input,
+html[lang="te"] select {
+  font-family: "Noto Sans Telugu", "Nirmala UI", "Lohit Telugu", system-ui, sans-serif;
+}
+
+html[lang="hi"] body,
+html[lang="hi"] button,
+html[lang="hi"] input,
+html[lang="hi"] select {
+  font-family: "Noto Sans Devanagari", "Nirmala UI", "Lohit Devanagari", system-ui, sans-serif;
+}
+
+html[lang="ta"] body,
+html[lang="ta"] button,
+html[lang="ta"] input,
+html[lang="ta"] select {
+  font-family: "Noto Sans Tamil", "Lohit Tamil", system-ui, sans-serif;
+}
+
+html[lang="kn"] body,
+html[lang="kn"] button,
+html[lang="kn"] input,
+html[lang="kn"] select {
+  font-family: "Noto Sans Kannada", "Tunga", system-ui, sans-serif;
+}
+
 button,
 a {
   font: inherit;
@@ -281,6 +309,30 @@ a {
   display: flex;
   align-items: center;
   gap: 17px;
+}
+
+.language-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b788b;
+  font-size: 11px;
+}
+
+.language-control select {
+  max-width: 128px;
+  min-height: 32px;
+  padding: 4px 25px 4px 8px;
+  border: 1px solid #e3e8f0;
+  border-radius: 7px;
+  color: #344158;
+  background: #fff;
+  font: inherit;
+}
+
+.language-control select:focus-visible {
+  outline: 3px solid #9cadff;
+  outline-offset: 2px;
 }
 
 .api-indicator {
@@ -1152,7 +1204,9 @@ h1 span {
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.7px;
-  white-space: nowrap;
+  min-width: 0;
+  flex-wrap: wrap;
+  white-space: normal;
 }
 
 .footer-brand-mark {
@@ -1241,11 +1295,27 @@ h1 span {
   }
 
   .topbar-actions {
-    gap: 10px;
+    gap: 8px;
   }
 
   .api-indicator {
     font-size: 10px;
+  }
+
+  .language-control > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .language-control select {
+    max-width: 95px;
+    min-height: 33px;
+    padding-right: 20px;
+    font-size: 11px;
   }
 
   .notification-button,

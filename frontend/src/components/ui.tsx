@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ApiError } from "../types";
+import { useLocalization } from "../localization";
 
 type IconName =
   | "grid"
@@ -45,14 +46,16 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
 }
 
 export function ErrorMessage({ error }: { error: ApiError }) {
+  const { t } = useLocalization();
   return (
     <div className="inline-error" role="alert">
       <Icon name="alert" size={16} />
-      <span>{error.message}</span>
+      <span>{t(error.message)}</span>
     </div>
   );
 }
 
 export function LoadingValue() {
-  return <span className="loading-value" aria-label="Loading" />;
+  const { t } = useLocalization();
+  return <span className="loading-value" aria-label={t("Loading")} />;
 }
