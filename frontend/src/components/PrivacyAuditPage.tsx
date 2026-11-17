@@ -169,8 +169,17 @@ export function PrivacyAuditPage() {
   const reloadHistory = useCallback(() => {
     setHistory({ status: "loading" });
     void getAuditReports().then(
-      (reports) => setHistory({ status: "ready", data: reports }),
-      (error: unknown) => setHistory({ status: "error", error: toApiError(error) }),
+      (reports) => {
+        setHistory({ status: "ready", data: reports });
+        setSelectedId((current) =>
+          current !== null && reports.some((report) => report.id === current)
+            ? current
+            : reports[0]?.id ?? null,
+        );
+      },
+      (error: unknown) => {
+        setHistory({ status: "error", error: toApiError(error) });
+      },
     );
   }, []);
 
@@ -309,6 +318,8 @@ export function PrivacyAuditPage() {
           <span className={`audit-available${devices.status === "error" ? " unavailable" : ""}`}>
             {devices.status === "error"
               ? "TARGET LIST UNAVAILABLE"
+              : devices.status === "loading"
+                ? "LOADING TARGETS"
               : devices.status === "ready" && devices.data.length === 0
                 ? "NO TARGETS"
                 : "SUPPORTED SCOPE"}
@@ -458,21 +469,27 @@ export function PrivacyAuditPage() {
         </aside>
 
         <section className="panel audit-report-panel" aria-label="Selected audit report">
-          {selectedId === null ? (
-            history.status === "ready" && history.data.length === 0 ? (
+          {history.status === "loading" ? (
+            <div className="panel-state"><LoadingValue /><span>Loading saved report history…</span></div>
+          ) : history.status === "error" ? (
+            <div className="audit-report-placeholder">
+              <span className="empty-icon"><Icon name="alert" size={20} /></span>
+              <strong>Reports could not be loaded</strong>
+              <span>Report details are unavailable until the backend can return the history list.</span>
+            </div>
+          ) : selectedId === null || !selectedReport ? (
+            history.data.length === 0 ? (
               <div className="audit-report-placeholder">
                 <span className="empty-icon"><Icon name="shield" size={20} /></span>
                 <strong>No report selected</strong>
                 <span>Run an audit or select a saved report to view its results.</span>
               </div>
-            ) : history.status === "error" ? (
-              <div className="audit-report-placeholder">
-                <span className="empty-icon"><Icon name="alert" size={20} /></span>
-                <strong>Reports could not be loaded</strong>
-                <span>Report details are unavailable until the backend can return the history list.</span>
-              </div>
             ) : (
-              <div className="panel-state"><LoadingValue /><span>Loading report…</span></div>
+              <div className="audit-report-placeholder">
+                <span className="empty-icon"><Icon name="shield" size={20} /></span>
+                <strong>No report selected</strong>
+                <span>Select a saved report to view its results.</span>
+              </div>
             )
           ) : (
             <>

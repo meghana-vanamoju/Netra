@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { Icon } from "./ui";
 import "../styles.css";
 
@@ -40,6 +40,19 @@ export function AppShell({
   onNavigate,
   children,
 }: AppShellProps) {
+  const mobileNavRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const activeLink = mobileNavRef.current?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    );
+    activeLink?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [page]);
+
   const navigate = (
     event: MouseEvent<HTMLAnchorElement>,
     item: (typeof navigation)[number],
@@ -141,7 +154,11 @@ export function AppShell({
           </div>
         </header>
 
-        <nav className="mobile-nav" aria-label="Main navigation">
+        <nav
+          className="mobile-nav"
+          aria-label="Main navigation"
+          ref={mobileNavRef}
+        >
           {navigation.map((item) => (
             <a
               className={`mobile-nav-link${item.page === page ? " active" : ""}`}

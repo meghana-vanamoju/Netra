@@ -78,6 +78,16 @@ function DeviceDetails({
       ref={dialogRef}
       aria-labelledby="device-dialog-title"
       onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        dialogRef.current?.close();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          dialogRef.current?.close();
+        }
+      }}
     >
       <div className="dialog-header">
         <div>

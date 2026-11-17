@@ -346,7 +346,13 @@ function App() {
                   <div className="panel-kicker">TRAFFIC BREAKDOWN</div>
                   <h2>DNS activity</h2>
                 </div>
-                <span className="live-tag"><span /> LIVE DATA</span>
+                <span className="read-only-tag" role="status">
+                  {data.dns.status === "loading"
+                    ? "LOADING"
+                    : data.dns.status === "error"
+                      ? "UNAVAILABLE"
+                      : "BACKEND DATA"}
+                </span>
               </div>
               {data.dns.status === "loading" ? (
                 <div className="panel-state"><LoadingValue /><span>Loading DNS analytics…</span></div>
