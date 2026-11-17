@@ -255,3 +255,81 @@ def test_browser_lan_discovery_rejects_unauthorized_subnets(
     assert response.headers["access-control-allow-origin"] == origin
     assert isinstance(response.json()["detail"], str)
     scan.assert_not_called()
+
+
+PERSONAL_SUBNET = "192.168.29.0/24"
+PERSONAL_DEVICE = {
+    "ip_address": "192.168.29.10",
+    "mac_address": "11:22:33:44:55:66",
+    "hostname": "personal-laptop",
+    "discovery_source": "arp",
+}
+
+
+@pytest.mark.parametrize("origin", BROWSER_ORIGINS)
+@pytest.mark.parametrize(
+    "query_value",
+    ("192.168.29.0/24", "192.168.29.0%2F24", "192.168.29.0%252F24"),
+)
+def test_browser_lan_discovery_accepts_personal_subnet(
+    monkeypatch, origin, query_value
+):
+    """The personal-router subnet must not regress the office-network fix."""
+    _prepare_browser_scan(monkeypatch, PERSONAL_SUBNET)
+    with patch(
+        "api_discovery.discover_subnet", return_value=[dict(PERSONAL_DEVICE)]
+    ) as scan:
+        response = client.post(
+            f"/api/discovery/run?subnet={query_value}",
+            headers={"Origin": origin, "Accept": "application/json"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"discovered": 1, "subnet": PERSONAL_SUBNET}
+    scan.assert_called_once_with(PERSONAL_SUBNET)
+    assert response.headers["access-control-allow-origin"] == origin
+    assert client.get("/api/discovery/results").json()[0]["ip_address"] == (
+        PERSONAL_DEVICE["ip_address"]
+    )
+    inventory = client.get("/api/devices?limit=200").json()
+    assert any(
+        device["ip_address"] == PERSONAL_DEVICE["ip_address"] for device in inventory
+    )
+
+
+def test_personal_scan_preserves_other_subnet_inventory(monkeypatch):
+    """Upserts refresh matching devices without deleting other-subnet records."""
+    _prepare_browser_scan(monkeypatch, "192.168.88.0/24")
+    with patch("api_discovery.discover_subnet", return_value=[dict(LAN_DEVICE)]):
+        client.post(
+            "/api/discovery/run", params={"subnet": "192.168.88.0/24"}
+        )
+
+    _prepare_browser_scan(monkeypatch, PERSONAL_SUBNET)
+    with patch(
+        "api_discovery.discover_subnet", return_value=[dict(PERSONAL_DEVICE)]
+    ):
+        response = client.post(
+            "/api/discovery/run", params={"subnet": PERSONAL_SUBNET}
+        )
+
+    assert response.status_code == 200, response.text
+    inventory_ips = {
+        device["ip_address"]
+        for device in client.get("/api/devices?limit=200").json()
+    }
+    assert LAN_DEVICE["ip_address"] in inventory_ips
+    assert PERSONAL_DEVICE["ip_address"] in inventory_ips
+
+
+def test_ipv6_loopback_origin_preflight_allowed():
+    """Vite binds to ::1 on some hosts; that origin must reach the API."""
+    response = client.options(
+        "/api/discovery/run?subnet=192.168.29.0%2F24",
+        headers={
+            "Origin": "http://[::1]:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://[::1]:5173"

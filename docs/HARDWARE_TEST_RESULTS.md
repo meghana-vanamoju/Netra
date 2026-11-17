@@ -97,3 +97,60 @@ The successful LAN scan does **not** verify router management support:
   application, or DNS enforcement.
 - No router configuration was changed, and no enforcement, verification, or
   snapshot rollback capability is claimed.
+
+## Personal Wi-Fi LAN Discovery Verification (browser-triggered)
+
+**Date:** 2026-11-17. This section is separate from the office Wi-Fi results
+above and records the first browser-triggered scan on the user's personal
+router at `192.168.29.0/24`.
+
+| Field | Observed value |
+|---|---|
+| Interface | `wlp2s0` |
+| Laptop IPv4 | `192.168.29.4/24` |
+| Gateway | `192.168.29.1` (MAC `84:90:0A:FA:5D:30`) |
+| Subnet | `192.168.29.0/24` |
+| Gateway ping | 4/4 replies, 0% loss (about 3–5 ms across checks) |
+| Backend health | `GET /api/health` → HTTP 200 |
+| Router capability | `GET /api/router/capabilities?ip=192.168.29.1` → HTTP 200, `network_reachable: true`, `management_interface_available: false`, `connected_devices: unsupported`, `dhcp_leases: unsupported`, `dns_logs: unsupported`, `authentication_required: unknown` |
+| Browser | Headless Chrome driven over CDP at `http://localhost:5173/#discovery`, clicking **Detect router** and then **LAN discovery** |
+| Browser request | `POST /api/discovery/run?subnet=192.168.29.0%2F24` — HTTP **200** |
+| Discovery response | `{"discovered": 2, "subnet": "192.168.29.0/24"}` |
+| UI result | `LAN endpoint returned 2 observation(s) from 192.168.29.0/24.` |
+| Unified inventory | **54 records** after the scan, including `192.168.29.1` (`_gateway`, source `arp`) and `192.168.29.30` (source `arp`) |
+| JS errors | None; no failed Netra API response during the workflow |
+
+The inventory retained the earlier `192.168.88.x` and `10.252.213.78`
+records. This confirms that the personal-subnet scan added/refreshed devices
+without silently deleting records from other subnets. Only two hosts were
+returned because LAN discovery reports the point-in-time ARP/neighbor table
+plus bounded probes on the backend host; it is not a claim that the router has
+only two connected devices. Sleeping, isolated, or not-yet-observed clients can
+be absent, and no vendor inference was made from MAC prefixes. The 64-host
+probe limit was unchanged. Router management APIs, authenticated sessions,
+DHCP lease access, policy application, and DNS enforcement remain unverified
+and are reported as `unsupported` by the backend. No router configuration or
+DNS setting was modified.
+
+### Repeated bare `/health` 404s are external
+
+The repeated `GET /health` 404 lines in the backend terminal are not produced
+by Netra. Netra only calls `/api/health`; no Netra source references a bare
+`/health` path. The requests come from the separate Prism AI Code Reviewer
+frontend, whose `frontend/src/services/api.ts` calls `request<HealthResponse>('/health')`
+through a Vite proxy whose `'/health'` target is `http://127.0.0.1:8000`
+(i.e. this backend). Stale Firefox history also contains direct visits to
+`http://127.0.0.1:8000/health` and `http://localhost:8000/health`. No Netra
+code was changed for these 404s and the external project was not modified.
+
+### Origin-related failure reproduced
+
+Opening the Vite frontend at `http://[::1]:5173` — the IPv6 loopback address
+the dev server actually binds to on this host — reproduced a complete failure:
+every API call was blocked at the CORS layer, the page showed `API unavailable`
+and `Could not connect to http://127.0.0.1:8000…` messages, and **no LAN
+discovery POST reached FastAPI**. The backend CORS allowlist now also accepts
+`http://[::1]:5173`; the required `http://localhost:5173` and
+`http://127.0.0.1:5173` origins were and remain allowed. Discovery buttons
+stay disabled while the active network is still being detected, so an early
+click cannot produce an empty-submit with no POST.

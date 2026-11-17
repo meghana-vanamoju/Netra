@@ -45,7 +45,14 @@ app.include_router(router_discovery_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        # Vite binds to the IPv6 loopback on some hosts; without this origin a
+        # browser opened at that address fails every API call at the CORS layer,
+        # so no discovery POST ever reaches this app.
+        "http://[::1]:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

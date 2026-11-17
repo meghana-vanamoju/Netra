@@ -391,12 +391,12 @@ export function DiscoveryPage() {
                                 disabled={routerBusy || discoveryBusy}
                             />
                         </label>
-                        <button className="secondary-button" type="submit" disabled={routerBusy || discoveryBusy}>
-                            {discoveryBusy ? "Discovering…" : "LAN discovery"}
+                        <button className="secondary-button" type="submit" disabled={network.status === "loading" || routerBusy || discoveryBusy}>
+                            {discoveryBusy ? "Discovering…" : network.status === "loading" ? "Detecting network…" : "LAN discovery"}
                         </button>
-                        <button className="primary-button" type="button" disabled={routerBusy || discoveryBusy} onClick={() => void runUnifiedDiscovery()}>
+                        <button className="primary-button" type="button" disabled={network.status === "loading" || routerBusy || discoveryBusy} onClick={() => void runUnifiedDiscovery()}>
                             <Icon name="pulse" size={17} />
-                            {routerBusy || discoveryBusy ? "Discovering…" : "Retrieve router + discover LAN"}
+                            {routerBusy || discoveryBusy ? "Discovering…" : network.status === "loading" ? "Detecting network…" : "Retrieve router + discover LAN"}
                         </button>
                     </form>
                     <p className="form-help">
