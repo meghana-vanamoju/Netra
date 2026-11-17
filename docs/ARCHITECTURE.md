@@ -4,12 +4,40 @@
 graph TD
   Frontend[React Vite] --> Backend[FastAPI]
   Backend --> SQLite[(SQLite)]
-  Backend --> Discovery
-  Backend --> DNS
-  Backend --> Audit
-  Backend --> Policy
+  Backend --> Discovery[LAN + router discovery]
+  Backend --> ProviderRegistry[DNS provider registry]
+  ProviderRegistry --> AdGuard[AdGuard Home HTTP API]
+  ProviderRegistry --> PiHole[Pi-hole v6 API]
+  Backend --> DNS[DNS ingestion + analytics]
+  Backend --> Classifier[Domain classification]
+  Backend --> Audit[Privacy audit]
+  Backend --> Policy[Policy planner]
+  Backend --> Consent[Consent + enforcement]
+  Consent --> AdGuard
+  Consent --> Snapshots[Config snapshots + rollback]
 ```
 
-Components: frontend dashboard, backend API, SQLite persistence, discovery, DNS analytics, audit, policy planning, snapshots, recovery.
-```
-/home/meghana/Documents/viswam/Netra/docs/INSTALLATION.md
+## DNS data flow (Milestone 9.0)
+
+1. `dns/providers/registry.py` selects a provider from environment configuration.
+2. `AdGuardHomeAdapter` authenticates with HTTP Basic auth and calls the
+   supported `/control/status`, `/control/querylog`, `/control/stats`, and
+   `/control/filtering/*` endpoints with bounded timeouts. `PiHoleAdapter`
+   preserves compatibility with `NETRA_PIHOLE_URL` / `NETRA_PIHOLE_TOKEN`.
+3. `POST /api/dns/events/sync` fetches a bounded, newest-first query log page
+   set, normalizes timestamps/domains/clients, and stores rows idempotently via
+   `(source, source_event_id)`.
+4. `dns/analytics.py` classifies domains with conservative suffix rules and
+   computes totals, unique domains, blocked/allowed counts, category and client
+   distributions, top domains, and hourly activity from stored events.
+5. Audit findings feed the dry-run planner. Nothing is applied until approval
+   with `confirm=true` **and** `NETRA_DNS_ENFORCEMENT_ENABLED=true`. Applied
+   user rules are snapshotted so rollback restores the exact prior rule list.
+
+Provider health is derived from real API calls. A running FastAPI process is
+never reported as a healthy DNS provider. Secrets stay in environment
+variables and are absent from API responses, logs, and status payloads.
+
+Components: frontend dashboard, backend API, SQLite persistence, discovery,
+DNS provider adapters, DNS analytics, audit, policy planning, consent-gated
+enforcement, snapshots, and recovery.

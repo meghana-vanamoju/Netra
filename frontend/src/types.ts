@@ -79,10 +79,43 @@ export type RouterDevicesResponse = {
   devices: DiscoveryResult[];
 };
 
+export type DnsProviderStatus = {
+  provider: string | null;
+  state: "healthy" | "not_configured" | "unreachable" | "unauthorized" | "timeout" | "unsupported_api" | "malformed_response" | "provider_unavailable";
+  message?: string;
+  capabilities: string[];
+  unsupported: string[];
+  version?: string | null;
+  authentication?: string;
+  query_log?: string;
+  statistics?: string;
+  filtering?: string;
+  config?: Record<string, boolean | number | string | null>;
+};
+
+export type DnsSyncResult = {
+  provider: string | null;
+  fetched: number;
+  inserted: number;
+  duplicates: number;
+  skipped: number;
+  state: string;
+};
+
 export type DnsSummary = {
   total: number;
   unique_domains: number;
   by_category: Record<string, number>;
+  blocked?: number;
+  allowed?: number;
+  blocking_percentage?: number | null;
+  unknown_blocked_status?: number;
+  top_domains?: { domain: string; count: number }[];
+  top_blocked_domains?: { domain: string; count: number }[];
+  by_client?: { client: string; count: number }[];
+  by_source?: Record<string, number>;
+  timeline?: { hour: string; count: number }[];
+  category_evidence?: Record<string, { evidence: string; confidence: string }>;
 };
 
 export type DnsDomainCount = {
@@ -102,6 +135,15 @@ export type DnsEvent = {
   category: string | null;
   device_id: number | null;
   timestamp: string;
+  query_type?: string | null;
+  blocked?: boolean | null;
+  client?: string | null;
+  client_name?: string | null;
+  reason?: string | null;
+  rules?: string[];
+  upstream?: string | null;
+  source?: string;
+  confidence?: string | null;
 };
 
 export type AuditReport = {

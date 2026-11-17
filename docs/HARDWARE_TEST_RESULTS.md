@@ -154,3 +154,86 @@ discovery POST reached FastAPI**. The backend CORS allowlist now also accepts
 `http://127.0.0.1:5173` origins were and remain allowed. Discovery buttons
 stay disabled while the active network is still being detected, so an early
 click cannot produce an empty-submit with no POST.
+
+## Real AdGuard Home DNS Monitoring (Milestone 9.0)
+
+**Date:** 2026-11-17. The existing lab container `netra-adguardhome-1`
+(`adguard/adguardhome:v0.107.50`) was started with
+`docker compose -f docker-compose.adguard.yml up -d`; no duplicate instance was
+created. The lab password was reset locally because only a bcrypt hash was
+available; the plaintext is kept in the backend environment outside Git.
+
+### Connectivity and real query retrieval
+
+| Check | Result |
+|---|---|
+| `GET /control/status` with configured credentials | HTTP **200**, version **v0.107.50**, `protection_enabled: true` |
+| Backend `GET /api/dns/providers/status` | `state: healthy`, `authentication: configured`, `version: v0.107.50`, `query_log/statistics/filtering: available`, capabilities include API connectivity/authentication/protection/query log/statistics/filtering |
+| Controlled queries | `dig @127.0.0.1 -p 53 <domain> A` for advertising, analytics, telemetry, CDN, social, essential, and unknown suffixes; query log confirmed each event |
+| `POST /api/dns/events/sync` (first run) | `fetched: 19`, `inserted: 19`, `duplicates: 0`, `skipped: 0` |
+| Repeated sync while healthy | `inserted: 0`, no duplicate rows; stored total unchanged |
+| Analytics from real events | `total: 19`, `unique_domains: 19`, `blocked: 9`, `allowed: 10`, `blocking_percentage: 47.37` |
+| Category distribution | Tracking/Analytics 6, Advertising 3, Unknown 2, Essential services 2, Social media 2, Content delivery 2, Telemetry 2 |
+| Evidence fields retained | client `172.22.0.1`, provider reasons (`FilteredBlackList`, `NotFilteredNotFound`), query type `A`, upstream, hourly timeline, category evidence |
+| Source label | All 19 rows have `source: adguard-home`; no synthetic event was used for these counts |
+
+### Provider interruption and recovery
+
+```text
+docker compose -f docker-compose.adguard.yml stop
+GET /api/dns/providers/status -> state: unreachable (HTTP 200 report)
+POST /api/dns/events/sync      -> HTTP 503, state: unreachable
+
+docker compose -f docker-compose.adguard.yml start
+GET /api/dns/providers/status -> state: healthy, version v0.107.50
+POST /api/dns/events/sync      -> HTTP 200, fetched 19, duplicates 19, inserted 0
+```
+
+The container is running again. No stored event was deleted during the outage
+or recovery.
+
+### Consent, enforcement, verification, rollback
+
+A lab client device (`172.22.0.1`) was registered and seven new controlled
+queries were generated and synced. Audit `id=1` produced a tracking/telemetry
+finding; policy `id=1` and dry-run `id=1` identified seven target domains
+(`m9e-ads.doubleclick.net`, `m9e-track1..6.google-analytics.com`) and explicitly
+excluded the essential-service domain.
+
+1. `POST /api/policies/1/approve?plan_id=1&confirm=true` → HTTP 200.
+2. `POST /api/policies/1/apply` → HTTP 200, `status: applied`,
+   `provider: adguard`, seven domains, `snapshot_id: 2`, approver `local-user`.
+3. AdGuard `/control/filtering/status` showed exactly the seven expected user
+   rules — this is direct provider evidence, not an API success claim.
+4. Each controlled domain was queried with `dig` through the lab listener.
+   AdGuard's query log showed `FilteredBlackList` for all seven; sync inserted
+   nine new real records.
+5. `GET /api/verification/policy/1` → `status: verified` with seven evidence
+   entries containing domain, reason, and observation timestamp.
+6. `POST /api/snapshots/2/rollback?confirm=true` → `status: restored`, rules 0.
+   AdGuard user rules were empty afterward; policy status became `reverted`
+   and the execution record became `rolled_back`.
+
+An earlier apply attempt returned `malformed_response` because AdGuard's
+`set_rules` success response has an empty body; the adapter was fixed to treat
+an empty 2xx body as success, its one partially added rule was restored from
+snapshot `id=1`, and the final flow above was run cleanly. This failure path is
+now covered by an automated test.
+
+**Capability boundary:** default AdGuard filter lists also block the selected
+advertising/analytics suffixes, so filtered responses alone do not prove that
+the Netra-added rule caused the block. Causality here rests on the exact rule
+list observed in AdGuard plus rollback restoring that list. No personal router
+DNS setting, upstream resolver, or system-wide traffic route was changed.
+
+### Reproduce
+
+```bash
+docker compose -f docker-compose.adguard.yml up -d
+cd backend && python3 -m uvicorn main:app --port 8001
+# with NETRA_ADGUARD_* and NETRA_DNS_ENFORCEMENT_ENABLED in the environment
+dig @127.0.0.1 -p 53 m9-check.google-analytics.com A +short
+curl -s -X POST http://127.0.0.1:8001/api/dns/events/sync
+curl -s http://127.0.0.1:8001/api/dns/analytics/summary
+curl -s http://127.0.0.1:8001/api/dns/providers/status
+```

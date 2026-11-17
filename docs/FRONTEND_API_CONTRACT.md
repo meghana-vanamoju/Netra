@@ -164,27 +164,53 @@ The Enforcement & Recovery page uses only read endpoints:
 
 | Method and path | Response |
 |---|---|
-| `GET /api/enforcement/status` | `{ "available": boolean, "backend": string \| null }`. `available` means a backend value is configured; it does not mean policy application is implemented or traffic is protected. |
-| `GET /api/recovery/status` | `{ "recovery_ready": boolean, "interrupted_executions": number }`. The current endpoint returns fixed values and does not perform or verify recovery. |
+| `GET /api/enforcement/status` | `{ "available": boolean, "backend": string \| null, "enabled": boolean, "provider_state": string }`. `available` is provider presence; `enabled` reflects the explicit opt-in flag. |
+| `GET /api/recovery/status` | `{ "recovery_ready": boolean, "interrupted_executions": number, "failed_executions": number }`, now derived from policy state rather than fixed values. |
 | `GET /api/snapshots` | Array of `{ "id": number, "backend": string \| null, "created_at": string, "checksum": string \| null }`. |
 | `GET /api/snapshots/{snapshot_id}` | `{ "id": number, "state": object \| null, "checksum": string \| null, "integrity_ok": boolean }`. `integrity_ok` reports a checksum comparison, not whether the state is currently applied. |
 | `GET /api/policies` | Saved policy summaries used to select a policy for status inspection. |
 | `GET /api/policies/{policy_id}/approval` | `{ "status": string, "approver": string \| null, "approved_at": string \| null, "plan_id": number \| null }`. The status is the saved policy status and is not an independent consent decision. |
 | `GET /api/policies/{policy_id}/execution` | `{ "status": string, "details": object \| null }`; returns 404 if no execution record exists. |
 | `GET /api/policies/{policy_id}/rollback-status` | `{ "policy_id": number, "status": string, "rollback_ready": boolean }`. This is a status flag only. |
-| `GET /api/verification/policy/{policy_id}` | `{ "policy_id": number, "status": "not_verified", "reason": string }` in the current implementation. |
+| `GET /api/verification/policy/{policy_id}` | `{ "policy_id", "status": "verified" \| "not_verified", "provider", "evidence", "reason" }`; `verified` requires real provider query-log evidence. |
 
-The page does not call snapshot creation, approval, apply, or rollback
-endpoints. DNS policy application is not implemented, snapshot rollback
-returns `not_implemented` for a configured backend (or 503 when none is
-configured), verification currently reports `not_verified`, and recovery
-status is a fixed response rather than evidence of a tested restoration. No
-configured-backend or recovery-ready response should be interpreted as active
-traffic protection or successful recovery.
+The read-only page does not call approval, apply, or rollback. Those endpoints
+now exist for a separate consent-controlled workflow:
+`POST /api/policies/{id}/approve?plan_id=&confirm=true`,
+`POST /api/policies/{id}/apply`, and
+`POST /api/snapshots/{id}/rollback?confirm=true`. They are only usable with a
+configured provider and explicit opt-in. Configure the UI to show loading,
+error, empty, and success states; never label a configured backend as active
+protection.
 
 ## Errors and pagination
 
-API errors use JSON shaped as `{ "detail": "..." }`. Device inventory accepts
-`limit` and `offset`; `limit` is capped at 200. The dashboard requests the
-first 200 records and labels a full page as a lower bound rather than claiming
-it is the total inventory.
+API errors use JSON shaped as `{ "detail": "..." }`. For provider failures the
+detail is an object with `state` and `message`; `api.ts` surfaces the message.
+Device inventory accepts `limit` and `offset`; `limit` is capped at 200. The
+dashboard requests the first 200 records and labels a full page as a lower
+bound rather than claiming it is the total inventory.
+
+## Milestone 9.0 provider handoff for Copilot
+
+No existing UI page was redesigned. The additive client surface is:
+
+- `getDnsProviderStatus()` → `DnsProviderStatus`; render `state` with distinct
+  loading/error/empty states. Only `healthy` may be shown as connected.
+- `getDnsProviderStatistics()` → provider counters; show null as unknown.
+- `getDnsProviderFiltering()` → `enabled`, `user_rules`, `filter_count`.
+- `syncDnsEvents()` → `DnsSyncResult`; use a busy state, then refresh summary,
+  events, and domains. A 503 means the provider is unavailable, not an empty
+  log.
+- `DnsSummary` now includes `blocked`, `allowed`, `blocking_percentage`,
+  `top_blocked_domains`, `by_client`, `by_source`, `timeline`, and
+  `category_evidence`. Treat null percentages as unknown.
+- `DnsEvent` now includes `blocked`, `query_type`, `client`, `client_name`,
+  `reason`, `rules`, `upstream`, `source`, and `confidence`. Label sources:
+  `adguard-home`, `pihole`, `manual`, `synthetic-demo`.
+
+Suggested components: a provider status badge on the DNS analytics page, a
+"Sync provider" button, blocked/allowed cards, a category evidence panel, and
+an optional consent-gated policy drawer that links to existing approval,
+execution, verification, and rollback endpoints. These are UI tasks for
+Copilot; backend API and TypeScript types are ready.

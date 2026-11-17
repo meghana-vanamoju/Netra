@@ -45,4 +45,44 @@ no router settings are changed. AdGuard Home may not provide a read-only API
 role, so the configured account can have broader privileges than Netra uses.
 See
 [Router Compatibility](ROUTER_COMPATIBILITY.md) for field and support limits.
+
+## Real DNS monitoring (AdGuard Home / Pi-hole)
+
+The same `NETRA_ADGUARD_*` variables enable DNS query monitoring. Start the
+existing local lab (no duplicate instance) with:
+
+```bash
+docker compose -f docker-compose.adguard.yml up -d
+```
+
+Configure the backend process with:
+
+```text
+NETRA_ADGUARD_API_URL=http://127.0.0.1:3001
+NETRA_ADGUARD_USERNAME=<AdGuard Home username>
+NETRA_ADGUARD_PASSWORD=<secret>
+NETRA_ADGUARD_TIMEOUT=5
+NETRA_ADGUARD_CONNECT_TIMEOUT=3
+NETRA_ADGUARD_MAX_EVENTS=500
+NETRA_ADGUARD_PAGE_SIZE=100
+NETRA_DNS_BACKEND=adguard
+```
+
+For Pi-hole v6 instead, set `NETRA_PIHOLE_URL` and `NETRA_PIHOLE_TOKEN` and
+`NETRA_DNS_BACKEND=pihole`. Provider switching is env-driven; no settings API
+stores credentials.
+
+Enforcement is **off by default**. To permit consent-gated rule changes in the
+local lab only, additionally set:
+
+```text
+NETRA_DNS_ENFORCEMENT_ENABLED=true
+```
+
+Never set this for a personal router unless you intend to change its DNS
+filtering. Read-only monitoring, sync, analytics, audit, and dry-run all work
+without it. See [AdGuard Home integration](ADGUARD_HOME_INTEGRATION.md).
+
+CORS: the backend allows `http://localhost:5173`, `http://127.0.0.1:5173`, and
+`http://[::1]:5173`.
 ```

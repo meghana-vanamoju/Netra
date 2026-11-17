@@ -11,7 +11,9 @@ import type {
   DnsDeviceCount,
   DnsDomainCount,
   DnsEvent,
+  DnsProviderStatus,
   DnsSummary,
+  DnsSyncResult,
   DryRunImpact,
   DryRunResult,
   EnforcementStatus,
@@ -78,6 +80,13 @@ async function requestJson<T>(
       const body: { detail?: unknown } = await response.json();
       if (typeof body.detail === "string" && body.detail.trim()) {
         detail = body.detail;
+      } else if (body.detail && typeof body.detail === "object") {
+        const info = body.detail as { message?: unknown; state?: unknown };
+        if (typeof info.message === "string" && info.message.trim()) {
+          detail = info.message;
+        } else if (typeof info.state === "string" && info.state.trim()) {
+          detail = `DNS provider state: ${info.state}`;
+        }
       }
     } catch {
       // Keep the HTTP status message when the server does not return JSON.
@@ -171,6 +180,24 @@ export function getDnsSummary(deviceId?: number) {
   const search = query.toString();
   const suffix = search ? `?${search}` : "";
   return requestJson<DnsSummary>(`/api/dns/analytics/summary${suffix}`);
+}
+
+export function getDnsProviderStatus() {
+  return requestJson<DnsProviderStatus>("/api/dns/providers/status");
+}
+
+export function getDnsProviderStatistics() {
+  return requestJson<Record<string, unknown>>("/api/dns/providers/statistics");
+}
+
+export function getDnsProviderFiltering() {
+  return requestJson<{ enabled: boolean; user_rules: string[]; filter_count: number | null }>(
+    "/api/dns/providers/filtering",
+  );
+}
+
+export function syncDnsEvents() {
+  return requestJson<DnsSyncResult>("/api/dns/events/sync", { method: "POST" });
 }
 
 export function getDnsDomains(limit = 20) {

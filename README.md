@@ -27,6 +27,8 @@ Netra aims to:
 - FastAPI backend foundation.
 - Device inventory, discovery, and classification APIs.
 - DNS analytics, privacy audits, policy planning, enforcement lifecycle, snapshots, recovery, and backend capability APIs.
+- Real AdGuard Home query-log/statistics integration with authenticated API access, bounded idempotent sync, provider health states, and Pi-hole compatibility.
+- Evidence-based domain categorization (advertising, tracking/analytics, telemetry, social, CDN, essential, unknown) with category confidence and source labels.
 - React + TypeScript + Vite frontend with a responsive live dashboard for device inventory, DNS activity, saved audit findings, and backend health.
 - Frontend/backend separation with dedicated backend domain modules.
 
@@ -36,7 +38,7 @@ Netra aims to:
 - Detailed DNS event and domain views.
 - Audit execution and findings management screens.
 - Policy review, consent, and enforcement controls.
-- Safe DNS filtering integration (via an established filtering engine/provider).
+- UI controls for provider status, DNS sync, blocked/allowed analytics, consent, and rollback (API and TypeScript client are ready; UI handoff is documented).
 - Snapshot and recovery management screens.
 - Before/after benchmarking.
 - Multilingual dashboard (English, Telugu, Hindi, Tamil, Kannada).
@@ -191,13 +193,42 @@ cd backend
 python3 -m pytest -q
 ```
 
+### Real DNS provider (AdGuard Home)
+
+Set provider configuration in the **backend** environment (never in frontend
+code or Git). The local lab compose file maps AdGuard Home's web UI to port
+`3001`:
+
+```bash
+export NETRA_ADGUARD_API_URL=http://127.0.0.1:3001
+export NETRA_ADGUARD_USERNAME='<AdGuard Home user>'
+export NETRA_ADGUARD_PASSWORD='<secret>'
+export NETRA_DNS_BACKEND=adguard          # optional when only AdGuard is configured
+export NETRA_DNS_ENFORCEMENT_ENABLED=true # opt-in only; omit for read-only monitoring
+```
+
+Then:
+
+```bash
+curl -s http://127.0.0.1:8000/api/dns/providers/status
+curl -s -X POST http://127.0.0.1:8000/api/dns/events/sync
+curl -s http://127.0.0.1:8000/api/dns/analytics/summary
+```
+
+Read-only monitoring works without `NETRA_DNS_ENFORCEMENT_ENABLED`. Policy
+application always requires a dry run and explicit approval, and rollback is
+recorded as a configuration snapshot. See
+[AdGuard Home integration](docs/ADGUARD_HOME_INTEGRATION.md) for limits and
+hardware evidence.
+
 ## API
 
 ### Implemented
 
 - `GET /api/health` and `GET /api/db/health` — service and database health.
 - `GET /api/devices?limit=200` — dashboard device inventory (backend maximum per request: 200).
-- `GET /api/dns/analytics/summary` — DNS event and category totals.
+- `GET /api/dns/analytics/summary` — DNS event and category totals, including blocked/allowed metrics and time buckets.
+- `GET /api/dns/providers/status`, `GET /api/dns/providers/statistics`, `GET /api/dns/providers/filtering`, `POST /api/dns/events/sync` — real provider state and bounded, idempotent query retrieval.
 - `GET /api/audits`, `GET /api/audits/{audit_id}`, and `GET /api/audits/{audit_id}/findings` — latest saved audit and findings; dashboard reads these without starting an audit.
 - `GET /api/backend/capabilities` — DNS backend configuration status, not proof of active enforcement.
 

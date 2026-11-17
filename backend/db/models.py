@@ -26,6 +26,16 @@ class DNSEvent(Base):
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=True, index=True)
     category = Column(String(64), nullable=True)
     blocked = Column(Integer, nullable=True)  # 1/0/None
+    # Real-provider provenance and dedup fields. All nullable so legacy rows and
+    # synthetic demo events remain valid.
+    source = Column(String(32), nullable=True, index=True)
+    source_event_id = Column(String(64), nullable=True)
+    client = Column(String(255), nullable=True)
+    client_name = Column(String(255), nullable=True)
+    reason = Column(String(128), nullable=True)
+    rules_json = Column(JSON, nullable=True)
+    upstream = Column(String(512), nullable=True)
+    confidence = Column(String(32), nullable=True)
     device = relationship("Device", back_populates="dns_events")
 
 class AuditReport(Base):
