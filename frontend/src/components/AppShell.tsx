@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { Icon } from "./ui";
 import { LanguageSelector, LocalizedTree } from "../localization";
+import { ThemeSelector } from "../theme";
 import "../styles.css";
 
 export type AppPage =
@@ -140,6 +141,7 @@ export function AppShell({
           </div>
           <div className="topbar-actions">
             <LanguageSelector />
+            <ThemeSelector />
             <div
               className={`api-indicator${apiOnline ? "" : apiChecking ? " checking" : " offline"}`}
               role="status"

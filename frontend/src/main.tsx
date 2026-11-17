@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { LocalizationProvider } from "./localization";
+import { ThemeProvider } from "./theme";
 
 const rootElement = document.getElementById("root");
 
@@ -9,7 +10,9 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <LocalizationProvider>
-    <App />
-  </LocalizationProvider>,
+  <ThemeProvider>
+    <LocalizationProvider>
+      <App />
+    </LocalizationProvider>
+  </ThemeProvider>,
 );
