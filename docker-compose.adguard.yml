@@ -1,11 +1,9 @@
-version: "3.8"
 services:
   adguardhome:
     image: adguard/adguardhome:v0.107.50
     ports:
-      - "3000:3000"
+      - "3001:3000"
       - "53:53/udp"
     volumes:
       - ./adguard-work:/opt/adguardhome/work
       - ./adguard-conf:/opt/adguardhome/conf
-```
