@@ -7,4 +7,3 @@ router = APIRouter(prefix="/api/verification", tags=["verification"])
 @router.get("/policy/{policy_id}")
 def verify_policy(policy_id: int, db: Session = Depends(get_db)):
     return {"policy_id": policy_id, "status": "not_verified", "reason": "No backend configured"}
-PY
