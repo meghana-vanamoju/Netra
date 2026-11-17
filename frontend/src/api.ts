@@ -118,7 +118,15 @@ export function classifyDevice(deviceId: number) {
 }
 
 export function runDiscovery(subnet: string) {
-  const query = new URLSearchParams({ subnet });
+  // URLSearchParams already escapes "/". Decode first so a value that is
+  // already percent-encoded is not encoded a second time (% -> %25).
+  let canonicalSubnet = subnet.trim();
+  try {
+    canonicalSubnet = decodeURIComponent(canonicalSubnet);
+  } catch {
+    // Keep the original value; the backend validates and reports bad CIDRs.
+  }
+  const query = new URLSearchParams({ subnet: canonicalSubnet });
   return requestJson<DiscoveryResponse>(
     `/api/discovery/run?${query.toString()}`,
     { method: "POST" },

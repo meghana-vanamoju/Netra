@@ -2,9 +2,13 @@ import os, tempfile
 import json
 from types import SimpleNamespace
 
+import pytest
+
 os.environ["NETRA_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "disc.db")
 
+import api_discovery
 import discovery.service as svc
+from api_discovery import canonicalize_subnet
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from db.session import init_db
@@ -128,3 +132,126 @@ def test_empty_scan_replaces_current_results(monkeypatch):
         )
     assert response.json()["discovered"] == 0
     assert client.get("/api/discovery/results").json() == []
+
+
+BROWSER_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+LAN_DEVICE = {
+    "ip_address": "192.168.88.10",
+    "mac_address": "AA:BB:CC:DD:EE:FF",
+    "hostname": "office-phone",
+    "discovery_source": "arp",
+}
+
+
+def _prepare_browser_scan(monkeypatch, subnet="192.168.88.0/24"):
+    monkeypatch.setenv("NETRA_AUTHORIZED_CIDRS", subnet)
+    monkeypatch.setattr(
+        "discovery.service.get_local_network_info",
+        lambda: {"subnet": subnet, "gateway": None, "ip_address": None},
+    )
+    monkeypatch.setattr(api_discovery, "_results", [])
+    monkeypatch.setattr(api_discovery, "_router_results", [])
+
+
+def test_canonicalize_subnet_handles_browser_encoding_layers():
+    assert canonicalize_subnet("192.168.88.0/24") == "192.168.88.0/24"
+    assert canonicalize_subnet("192.168.88.0%2F24") == "192.168.88.0/24"
+    assert canonicalize_subnet("192.168.88.0%252F24") == "192.168.88.0/24"
+    assert canonicalize_subnet(" 192.168.88.0%252F24 ") == "192.168.88.0/24"
+
+
+@pytest.mark.parametrize("origin", BROWSER_ORIGINS)
+@pytest.mark.parametrize(
+    "query_value",
+    ("192.168.88.0/24", "192.168.88.0%2F24", "192.168.88.0%252F24"),
+)
+def test_browser_lan_discovery_accepts_encoded_subnet(
+    monkeypatch, origin, query_value
+):
+    """Regression: browser query encoding must not become a 400 on the route."""
+    _prepare_browser_scan(monkeypatch)
+    with patch(
+        "api_discovery.discover_subnet", return_value=[dict(LAN_DEVICE)]
+    ) as scan:
+        response = client.post(
+            f"/api/discovery/run?subnet={query_value}",
+            headers={"Origin": origin, "Accept": "application/json"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"discovered": 1, "subnet": "192.168.88.0/24"}
+    scan.assert_called_once_with("192.168.88.0/24")
+    assert response.headers["access-control-allow-origin"] == origin
+
+    # The frontend reads these two endpoints after a successful scan.
+    assert client.get("/api/discovery/results").json()[0]["ip_address"] == (
+        LAN_DEVICE["ip_address"]
+    )
+    inventory = client.get("/api/devices?limit=200").json()
+    assert any(
+        device["ip_address"] == LAN_DEVICE["ip_address"] for device in inventory
+    )
+
+
+@pytest.mark.parametrize("origin", BROWSER_ORIGINS)
+@pytest.mark.parametrize(
+    "subnet",
+    (
+        "10.10.0.0/16",
+        "172.20.0.0/16",
+        "192.168.0.0/16",
+        "192.168.88.135/32",
+    ),
+)
+def test_browser_lan_discovery_accepts_other_private_subnets(
+    monkeypatch, origin, subnet
+):
+    _prepare_browser_scan(monkeypatch, subnet)
+    device = dict(LAN_DEVICE, ip_address="10.1.1.5")
+    with patch("api_discovery.discover_subnet", return_value=[device]) as scan:
+        response = client.post(
+            "/api/discovery/run",
+            params={"subnet": subnet},
+            headers={"Origin": origin, "Accept": "application/json"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"discovered": 1, "subnet": subnet}
+    scan.assert_called_once_with(subnet)
+
+
+@pytest.mark.parametrize("origin", BROWSER_ORIGINS)
+@pytest.mark.parametrize(
+    "query_value",
+    (
+        "8.8.8.0/24",
+        "8.8.8.0%252F24",
+        "127.0.0.0/24",
+        "169.254.0.0/16",
+        "224.0.0.0/24",
+        "192.168.88.0",
+        "192.168.88.0/33",
+        "not-a-subnet",
+        "192.168.88.0/24/8",
+    ),
+)
+def test_browser_lan_discovery_rejects_unauthorized_subnets(
+    monkeypatch, origin, query_value
+):
+    monkeypatch.delenv("NETRA_AUTHORIZED_CIDRS", raising=False)
+    monkeypatch.setattr(
+        "discovery.service.get_local_network_info",
+        lambda: {"subnet": "192.168.88.0/24", "gateway": None, "ip_address": None},
+    )
+    monkeypatch.setattr(api_discovery, "_results", [])
+    monkeypatch.setattr(api_discovery, "_router_results", [])
+    with patch("api_discovery.discover_subnet") as scan:
+        response = client.post(
+            f"/api/discovery/run?subnet={query_value}",
+            headers={"Origin": origin, "Accept": "application/json"},
+        )
+
+    assert response.status_code == 400, response.text
+    assert response.headers["access-control-allow-origin"] == origin
+    assert isinstance(response.json()["detail"], str)
+    scan.assert_not_called()

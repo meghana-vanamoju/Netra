@@ -91,6 +91,8 @@ def is_authorized_router_ip(ip: str) -> bool:
 
 
 def validate_subnet(cidr: str) -> str:
+    if "/" not in cidr:
+        raise ValueError("Subnet must be in CIDR notation with a prefix length")
     if not is_private_subnet(cidr):
         raise ValueError("Only private LAN subnets are allowed")
     net = ipaddress.ip_network(cidr, strict=False)
