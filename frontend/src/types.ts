@@ -153,6 +153,54 @@ export type DryRunImpact = {
   note?: string;
 } | null;
 
+export type EnforcementStatus = {
+  available: boolean;
+  backend: string | null;
+};
+
+export type RecoveryStatus = {
+  recovery_ready: boolean;
+  interrupted_executions: number;
+};
+
+export type SnapshotSummary = {
+  id: number;
+  backend: string | null;
+  created_at: string;
+  checksum: string | null;
+};
+
+export type SnapshotDetail = {
+  id: number;
+  state: Record<string, unknown> | null;
+  checksum: string | null;
+  integrity_ok: boolean;
+};
+
+export type PolicyApprovalStatus = {
+  status: string;
+  approver: string | null;
+  approved_at: string | null;
+  plan_id: number | null;
+};
+
+export type PolicyExecutionStatus = {
+  status: string;
+  details: Record<string, unknown> | null;
+};
+
+export type PolicyRollbackStatus = {
+  policy_id: number;
+  status: string;
+  rollback_ready: boolean;
+};
+
+export type PolicyVerificationStatus = {
+  policy_id: number;
+  status: string;
+  reason: string;
+};
+
 export type BackendCapabilities = {
   configured_backend: string | null;
   available: boolean;

@@ -128,6 +128,30 @@ and dry-run saves a plan record. The planning UI does not approve, apply, or
 enforce policies. A projected blocked-query count is not evidence that traffic
 was blocked or that protection is active.
 
+## Enforcement and recovery UI
+
+The Enforcement & Recovery page uses only read endpoints:
+
+| Method and path | Response |
+|---|---|
+| `GET /api/enforcement/status` | `{ "available": boolean, "backend": string \| null }`. `available` means a backend value is configured; it does not mean policy application is implemented or traffic is protected. |
+| `GET /api/recovery/status` | `{ "recovery_ready": boolean, "interrupted_executions": number }`. The current endpoint returns fixed values and does not perform or verify recovery. |
+| `GET /api/snapshots` | Array of `{ "id": number, "backend": string \| null, "created_at": string, "checksum": string \| null }`. |
+| `GET /api/snapshots/{snapshot_id}` | `{ "id": number, "state": object \| null, "checksum": string \| null, "integrity_ok": boolean }`. `integrity_ok` reports a checksum comparison, not whether the state is currently applied. |
+| `GET /api/policies` | Saved policy summaries used to select a policy for status inspection. |
+| `GET /api/policies/{policy_id}/approval` | `{ "status": string, "approver": string \| null, "approved_at": string \| null, "plan_id": number \| null }`. The status is the saved policy status and is not an independent consent decision. |
+| `GET /api/policies/{policy_id}/execution` | `{ "status": string, "details": object \| null }`; returns 404 if no execution record exists. |
+| `GET /api/policies/{policy_id}/rollback-status` | `{ "policy_id": number, "status": string, "rollback_ready": boolean }`. This is a status flag only. |
+| `GET /api/verification/policy/{policy_id}` | `{ "policy_id": number, "status": "not_verified", "reason": string }` in the current implementation. |
+
+The page does not call snapshot creation, approval, apply, or rollback
+endpoints. DNS policy application is not implemented, snapshot rollback
+returns `not_implemented` for a configured backend (or 503 when none is
+configured), verification currently reports `not_verified`, and recovery
+status is a fixed response rather than evidence of a tested restoration. No
+configured-backend or recovery-ready response should be interpreted as active
+traffic protection or successful recovery.
+
 ## Errors and pagination
 
 API errors use JSON shaped as `{ "detail": "..." }`. Device inventory accepts

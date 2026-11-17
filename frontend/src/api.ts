@@ -14,11 +14,19 @@ import type {
   DnsSummary,
   DryRunImpact,
   DryRunResult,
+  EnforcementStatus,
   HealthResponse,
   PolicyDetail,
+  PolicyApprovalStatus,
+  PolicyExecutionStatus,
   PolicyPlanResponse,
+  PolicyRollbackStatus,
   PolicySummary,
+  PolicyVerificationStatus,
+  RecoveryStatus,
   SavedDryRunPlan,
+  SnapshotDetail,
+  SnapshotSummary,
 } from "./types";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -213,4 +221,40 @@ export function getSavedDryRunPlan(planId: number) {
 
 export function getDryRunImpact(planId: number) {
   return requestJson<DryRunImpact>(`/api/policies/dry-run/${planId}/impact`);
+}
+
+export function getEnforcementStatus() {
+  return requestJson<EnforcementStatus>("/api/enforcement/status");
+}
+
+export function getRecoveryStatus() {
+  return requestJson<RecoveryStatus>("/api/recovery/status");
+}
+
+export function getSnapshots() {
+  return requestJson<SnapshotSummary[]>("/api/snapshots");
+}
+
+export function getSnapshot(snapshotId: number) {
+  return requestJson<SnapshotDetail>(`/api/snapshots/${snapshotId}`);
+}
+
+export function getPolicyApprovalStatus(policyId: number) {
+  return requestJson<PolicyApprovalStatus>(`/api/policies/${policyId}/approval`);
+}
+
+export function getPolicyExecutionStatus(policyId: number) {
+  return requestJson<PolicyExecutionStatus>(`/api/policies/${policyId}/execution`);
+}
+
+export function getPolicyRollbackStatus(policyId: number) {
+  return requestJson<PolicyRollbackStatus>(
+    `/api/policies/${policyId}/rollback-status`,
+  );
+}
+
+export function getPolicyVerificationStatus(policyId: number) {
+  return requestJson<PolicyVerificationStatus>(
+    `/api/verification/policy/${policyId}`,
+  );
 }

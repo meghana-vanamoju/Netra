@@ -66,6 +66,15 @@ linkage, or per-policy dry-run attribution; the UI labels those details as
 unavailable instead of inferring them. Repeating policy planning can create
 additional records; the backend does not guarantee deduplication.
 
+The Enforcement & Recovery page reads backend configuration, saved policy
+status, verification, execution and rollback status, recovery status, and saved
+snapshot history/details. It does not create snapshots or trigger approval,
+policy application, rollback, or recovery. A configured backend does not mean
+traffic is protected: policy application and snapshot rollback are not
+implemented, verification reports `not_verified`, and recovery status is a
+fixed backend response. See `../docs/FRONTEND_API_CONTRACT.md` for exact
+schemas and limitations.
+
 Discovery is synchronous, does not report progress, and probes at most 64
 addresses using the backend host's local network context. Its results are
 in-memory on the backend; a zero-result response does not prove that a network
