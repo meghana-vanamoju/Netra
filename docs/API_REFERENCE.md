@@ -1,6 +1,6 @@
 # API Reference
 
-All paths are relative to `http://127.0.0.1:8000` unless `VITE_API_BASE_URL`
+All paths are relative to `http://127.0.0.1:8084` unless `VITE_API_BASE_URL`
 says otherwise. No built-in authentication is provided; protect the backend
 with your own reverse proxy if it is exposed beyond loopback.
 

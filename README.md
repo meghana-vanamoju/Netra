@@ -169,10 +169,10 @@ cd Netra
 ```bash
 cd backend
 python3 -m pip install -r requirements.txt
-python3 -m uvicorn main:app --reload
+python3 -m uvicorn main:app --reload --host 127.0.0.1 --port 8084
 ```
 
-API available at `http://127.0.0.1:8000`. Health check: `GET /api/health`.
+API available at `http://127.0.0.1:8084`. Health check: `GET /api/health`.
 
 ### Frontend Setup
 
@@ -184,7 +184,7 @@ npm run dev
 
 Frontend available at `http://localhost:5173`.
 
-Set `VITE_API_BASE_URL` in the frontend environment to use a different backend (default: `http://127.0.0.1:8000`). See [frontend/README.md](frontend/README.md) for configuration and execution details.
+Set `VITE_API_BASE_URL` in the frontend environment to use a different backend (default: `http://127.0.0.1:8084`). See [frontend/README.md](frontend/README.md) for configuration and execution details.
 
 ### Tests
 
@@ -210,9 +210,9 @@ export NETRA_DNS_ENFORCEMENT_ENABLED=true # opt-in only; omit for read-only moni
 Then:
 
 ```bash
-curl -s http://127.0.0.1:8000/api/dns/providers/status
-curl -s -X POST http://127.0.0.1:8000/api/dns/events/sync
-curl -s http://127.0.0.1:8000/api/dns/analytics/summary
+curl -s http://127.0.0.1:8084/api/dns/providers/status
+curl -s -X POST http://127.0.0.1:8084/api/dns/events/sync
+curl -s http://127.0.0.1:8084/api/dns/analytics/summary
 ```
 
 Read-only monitoring works without `NETRA_DNS_ENFORCEMENT_ENABLED`. Policy

@@ -1,6 +1,6 @@
 # Netra Frontend API Contract
 
-The frontend uses `http://127.0.0.1:8000` by default. Configure another origin
+The frontend uses `http://127.0.0.1:8084` by default. Configure another origin
 with `VITE_API_BASE_URL`. The backend must allow the frontend origin through
 CORS.
 

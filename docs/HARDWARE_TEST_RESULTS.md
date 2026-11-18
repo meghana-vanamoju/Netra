@@ -17,7 +17,7 @@ supplied prior values:
 
 Read-only results:
 
-- `GET http://127.0.0.1:8000/api/discovery/network` returned HTTP 200 and the
+- `GET http://127.0.0.1:8084/api/discovery/network` returned HTTP 200 and the
   interface/address/gateway/subnet above.
 - The existing neighbor table showed `192.168.88.1` in `REACHABLE` state.
 - `POST /api/router/test?ip=192.168.88.1` returned HTTP 200 with
@@ -26,7 +26,7 @@ Read-only results:
 - `POST /api/router/devices?ip=192.168.88.1` returned HTTP 200 with
   `status: unsupported` and an empty device list. No AdGuard Home adapter was
   configured for this exact gateway IP.
-- IPv4 loopback health returned HTTP 200. IPv6 loopback to port 8000 failed;
+- IPv4 loopback health returned HTTP 200. IPv6 loopback to port 8084 failed;
   the backend listener is on `127.0.0.1`, which confirmed the frontend's
   previous `localhost` default could resolve to an unavailable `::1` listener.
 
@@ -138,9 +138,9 @@ The repeated `GET /health` 404 lines in the backend terminal are not produced
 by Netra. Netra only calls `/api/health`; no Netra source references a bare
 `/health` path. The requests come from the separate Prism AI Code Reviewer
 frontend, whose `frontend/src/services/api.ts` calls `request<HealthResponse>('/health')`
-through a Vite proxy whose `'/health'` target is `http://127.0.0.1:8000`
+through a Vite proxy whose `'/health'` target is `http://127.0.0.1:8084`
 (i.e. this backend). Stale Firefox history also contains direct visits to
-`http://127.0.0.1:8000/health` and `http://localhost:8000/health`. No Netra
+`http://127.0.0.1:8084/health` and `http://localhost:8084/health`. No Netra
 code was changed for these 404s and the external project was not modified.
 
 ### Origin-related failure reproduced
@@ -148,7 +148,7 @@ code was changed for these 404s and the external project was not modified.
 Opening the Vite frontend at `http://[::1]:5173` — the IPv6 loopback address
 the dev server actually binds to on this host — reproduced a complete failure:
 every API call was blocked at the CORS layer, the page showed `API unavailable`
-and `Could not connect to http://127.0.0.1:8000…` messages, and **no LAN
+and `Could not connect to http://127.0.0.1:8084…` messages, and **no LAN
 discovery POST reached FastAPI**. The backend CORS allowlist now also accepts
 `http://[::1]:5173`; the required `http://localhost:5173` and
 `http://127.0.0.1:5173` origins were and remain allowed. Discovery buttons

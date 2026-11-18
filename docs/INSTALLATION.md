@@ -5,15 +5,16 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8084
 
 Frontend:
 cd frontend
 npm install
 npm run dev
 
-Health: GET http://127.0.0.1:8000/api/health
-CORS: backend allows localhost:5173 and 127.0.0.1:5173.
+Health: GET http://127.0.0.1:8084/api/health
+CORS: backend allows http://localhost:5173, http://127.0.0.1:5173,
+and http://[::1]:5173.
 
 ## Optional AdGuard Home DHCP Inventory
 
