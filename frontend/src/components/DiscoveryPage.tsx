@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
     getDevices,
@@ -27,6 +27,21 @@ function toApiError(error: unknown): ApiError {
     return error instanceof Error
         ? error
         : new Error(`Unexpected API error: ${String(error)}`);
+}
+
+function discoveryErrorTitle(error: ApiError) {
+    if (error.status === 0) {
+        return /timed out/i.test(error.message)
+            ? "Discovery request timed out"
+            : "Backend connection failed";
+    }
+    if (error.status === 408 || error.status === 504) {
+        return "Discovery request timed out";
+    }
+    if (typeof error.status === "number" && error.status >= 500) {
+        return "Discovery service error";
+    }
+    return "LAN discovery failed";
 }
 
 function isPrivateIPv4(value: string) {
@@ -65,6 +80,8 @@ export function DiscoveryPage() {
     const [subnet, setSubnet] = useState("");
     const [routerBusy, setRouterBusy] = useState(false);
     const [discoveryBusy, setDiscoveryBusy] = useState(false);
+    const [scanElapsedSeconds, setScanElapsedSeconds] = useState(0);
+    const discoveryLock = useRef(false);
     const [routerTest, setRouterTest] = useState<RouterTestResponse | null>(null);
     const [capabilities, setCapabilities] =
         useState<RouterCapabilities | null>(null);
@@ -79,6 +96,16 @@ export function DiscoveryPage() {
     const [inventory, setInventory] =
         useState<ResourceState<Device[]>>({ status: "loading" });
     const [lastDiscovery, setLastDiscovery] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!discoveryBusy) return;
+        const startedAt = Date.now();
+        const updateElapsed = () => {
+            setScanElapsedSeconds((Date.now() - startedAt) / 1000);
+        };
+        const timer = window.setInterval(updateElapsed, 250);
+        return () => window.clearInterval(timer);
+    }, [discoveryBusy]);
 
     useEffect(() => {
         let active = true;
@@ -175,6 +202,7 @@ export function DiscoveryPage() {
     };
 
     const runLanDiscovery = async () => {
+        if (discoveryLock.current) return;
         const requestedSubnet = subnet.trim();
         setDiscoveryError(null);
         setScanResponse(null);
@@ -184,6 +212,8 @@ export function DiscoveryPage() {
             );
             return;
         }
+        discoveryLock.current = true;
+        setScanElapsedSeconds(0);
         setDiscoveryBusy(true);
         setResults({ status: "loading" });
         try {
@@ -195,6 +225,7 @@ export function DiscoveryPage() {
             setDiscoveryError(toApiError(error));
             setResults({ status: "error", error: toApiError(error) });
         } finally {
+            discoveryLock.current = false;
             setDiscoveryBusy(false);
         }
     };
@@ -402,8 +433,20 @@ export function DiscoveryPage() {
                     <p className="form-help">
                         The scan runs on the machine hosting Netra. It is limited to 64 host probes per run and the selected private subnet; results may be incomplete on isolated Wi-Fi or restricted hosts.
                     </p>
-                    {discoveryBusy && <div className="scan-progress" role="status" aria-live="polite"><span className="scan-spinner" /><span>Collecting local neighbor data and updating the unified inventory.</span></div>}
-                    {discoveryError && <ErrorMessage error={discoveryError} />}
+                    {discoveryBusy && (
+                        <div className="scan-progress" role="status" aria-live="polite">
+                            <span className="scan-spinner" />
+                            <strong>Scanning LAN</strong>
+                            <span>{scanElapsedSeconds.toFixed(1)}s <span>elapsed</span></span>
+                            <span>Up to 64 hosts</span>
+                        </div>
+                    )}
+                    {discoveryError && (
+                        <div className="discovery-error" role="alert">
+                            <strong>{discoveryErrorTitle(discoveryError)}</strong>
+                            <span>{discoveryError.message}</span>
+                        </div>
+                    )}
                 </section>
 
                 <section className="panel scan-results-panel" aria-labelledby="scan-results-title">
@@ -414,11 +457,29 @@ export function DiscoveryPage() {
                         </div>
                         {lastDiscovery && <span className="live-tag"><span /> UPDATED {new Date(lastDiscovery).toLocaleTimeString()}</span>}
                     </div>
-                    {scanResponse && <div className="scan-inventory-status">LAN endpoint returned {scanResponse.discovered} observation(s) from {scanResponse.subnet}.</div>}
+                    {scanResponse && (
+                        <div className="scan-inventory-status" role="status">
+                            <strong>{scanResponse.discovered}</strong>
+                            <span>{scanResponse.discovered === 1 ? "device discovered" : "devices discovered"}</span>
+                            {scanResponse.duration_seconds !== undefined && (
+                                <span>{scanResponse.duration_seconds.toFixed(1)}s <span>scan duration</span></span>
+                            )}
+                            {scanResponse.hosts_responding !== undefined && (
+                                <span>{scanResponse.hosts_responding} <span>hosts responding</span></span>
+                            )}
+                            {scanResponse.probes_attempted !== undefined && (
+                                <span>{scanResponse.probes_attempted} <span>probes attempted</span></span>
+                            )}
+                            {scanResponse.timeout_count !== undefined && (
+                                <span>{scanResponse.timeout_count} <span>timed out</span></span>
+                            )}
+                            {scanResponse.partial_results && <strong>Partial results</strong>}
+                        </div>
+                    )}
                     {results.status === "loading" ? (
                         <div className="panel-state" role="status">Loading inventory…</div>
                     ) : results.status === "error" ? (
-                        <ErrorMessage error={results.error} />
+                        discoveryError ? null : <ErrorMessage error={results.error} />
                     ) : results.data.length > 0 ? (
                         <div className="inventory-table-wrap">
                             <table className="device-table discovery-table">

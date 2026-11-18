@@ -12,6 +12,44 @@ with your own reverse proxy if it is exposed beyond loopback.
 - `GET /api/discovery/results`, `POST /api/discovery/run`, router discovery routes.
 - `GET /api/classifications/...`.
 
+## LAN discovery
+
+`POST /api/discovery/run?subnet={cidr}` requires a private IPv4 subnet within
+the active interface subnet or `NETRA_AUTHORIZED_CIDRS`. The backend performs
+at most 64 single-packet ICMP probes with at most eight concurrent workers. A
+probe process is limited to 1.25 seconds; the complete probe and optional
+reverse-DNS work share a 12-second overall deadline. Reverse DNS is disabled
+for API scans by default. A deadline or individual host timeout can produce a
+successful partial response rather than discarding observations already made.
+
+Successful responses retain the original fields and add scan telemetry:
+
+```json
+{
+  "discovered": 15,
+  "subnet": "192.168.88.0/24",
+  "duration_seconds": 7.256,
+  "probes_attempted": 64,
+  "hosts_responding": 15,
+  "timeout_count": 49,
+  "probe_errors": 0,
+  "partial_results": true
+}
+```
+
+`hosts_responding` counts successful ICMP replies. `timeout_count` includes
+ICMP no-reply outcomes and subprocess deadline expirations. `discovered` counts
+records supported by successful replies or newly observed neighbor entries;
+unchanged cached entries are not refreshed as new observations. MAC values are
+included only from complete Linux neighbor entries, and reverse-DNS hostnames
+are omitted by default.
+
+Invalid or unauthorized subnets return HTTP 400 with
+`{"detail":{"code":"invalid_subnet","message":"..."}}`. Probe or
+inventory failures return sanitized HTTP 503 details with a `code`, `message`,
+and the available scan telemetry. No stack trace or raw subprocess output is
+returned to the frontend.
+
 ## DNS provider and query data
 
 - `GET /api/dns/providers/status`

@@ -139,7 +139,7 @@ export function runDiscovery(subnet: string) {
   return requestJson<DiscoveryResponse>(
     `/api/discovery/run?${query.toString()}`,
     { method: "POST" },
-    180_000,
+    30_000,
   );
 }
 

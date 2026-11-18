@@ -17,6 +17,26 @@ graph TD
   Consent --> Snapshots[Config snapshots + rollback]
 ```
 
+## LAN Discovery flow
+
+`POST /api/discovery/run` validates the requested private subnet against the
+active interface or `NETRA_AUTHORIZED_CIDRS` before launching probes. The
+scanner selects at most 64 hosts and submits them to a worker pool capped at
+eight threads. Each ICMP subprocess is bounded to 1.25 seconds, and all probe
+work shares a 12-second monotonic deadline. Pending work is cancelled when the
+deadline expires; observations completed before then are retained and marked
+partial.
+
+Before probing, the backend snapshots complete Linux ARP entries. After probing
+it reports successful ICMP responders and neighbor entries that appeared or
+changed during the scan. An unchanged cached entry alone is not a new
+discovery. MAC addresses are retained only from complete neighbor entries;
+hostnames are not looked up in API scans, and vendors are never inferred from
+MAC prefixes. The route persists observations through the existing inventory
+upsert and returns duration, attempted probes, responding hosts, timeout and
+error counts, and the partial-result flag. The frontend displays those results
+and refreshes both the in-memory scan results and persistent device inventory.
+
 ## DNS data flow (Milestone 9.0)
 
 1. `dns/providers/registry.py` selects a provider from environment configuration.

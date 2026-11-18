@@ -155,6 +155,50 @@ discovery POST reached FastAPI**. The backend CORS allowlist now also accepts
 stay disabled while the active network is still being detected, so an early
 click cannot produce an empty-submit with no POST.
 
+## Bounded Concurrent Discovery Benchmark
+
+**Date:** 2026-11-18. The live scan used the same office subnet as the previous
+browser-triggered verification: `192.168.88.0/24`. The legacy timing and
+50-observation count below are the previously reported Netra measurements;
+responder and timeout counts were not captured during that run. New values are
+from an actual HTTP request to the running backend, not a mocked test.
+
+| Metric | Previous sequential implementation | Bounded concurrent implementation |
+|---|---:|---:|
+| Total duration | 59–63 seconds (reported) | 6.033 seconds backend |
+| Probe limit / attempted | 64 maximum; 64 were attempted | 64 attempted |
+| Hosts responding to ICMP | Not recorded | 25 |
+| No-reply / timeout count | Not recorded | 39 |
+| Discovery observations | 50 reported by the prior browser run | 25 |
+| IP/MAC evidence | Per-host evidence was not recorded with the legacy aggregate | 25/25 had an IP and a complete neighbor-table MAC |
+| Hostname/vendor | Legacy flow attempted reverse DNS; per-host outcome not recorded | 0 hostnames; vendors remain Unknown |
+| Probe errors / partial status | Not recorded | 0 errors; `partial_results: true` because hosts timed out |
+| Persisted inventory / UI | 51 records in the prior report | API returned 61 persistent records; UI displayed 51 merged rows |
+
+The new live run was approximately **9.8–10.4x faster** than the reported
+59–63-second baseline. Its 25 records are supported by successful ICMP replies
+and current complete neighbor-table entries; no hostname or vendor was
+fabricated. The old run's 50-record aggregate did not preserve responder
+counts or a per-IP evidence snapshot, so the 25-record difference cannot be
+classified conclusively as false positives. The old implementation included
+unchanged cached ARP entries, which the new implementation deliberately
+excludes unless the host replies or its neighbor entry changes during the scan.
+
+This measurement was triggered from the browser at `http://localhost:5173`.
+The API returned 25 current observations, all 25 with MAC evidence and no
+hostnames. The UI also displayed retained inventory records; these are not
+counted as current scan discoveries. The 61-record API inventory and 51-row
+UI merge are separate views, and no existing inventory rows were deleted.
+
+The exact new result was `discovered: 25`, `probes_attempted: 64`,
+`hosts_responding: 25`, `timeout_count: 39`, `probe_errors: 0`, and
+`partial_results: true`. This is a point-in-time office-network observation;
+Wi-Fi isolation, firewalls, sleeping clients, and ICMP filtering can affect
+both responder and neighbor-table evidence. Automated concurrency, timeout,
+authorization, stale-entry, and API error tests use deterministic mocks and
+are not part of these live measurements. No router or DNS configuration was
+changed.
+
 ## Real AdGuard Home DNS Monitoring (Milestone 9.0)
 
 **Date:** 2026-11-17. The existing lab container `netra-adguardhome-1`

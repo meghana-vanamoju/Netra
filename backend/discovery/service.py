@@ -1,9 +1,22 @@
 import ipaddress
 import os
-from itertools import islice
 import json
+import re
 import subprocess
-import socket
+from concurrent.futures import ThreadPoolExecutor, wait
+from itertools import islice
+from time import monotonic
+
+MAX_HOSTS_PER_SCAN = 64
+MAX_PROBE_WORKERS = 8
+MAX_DNS_WORKERS = 4
+DEFAULT_SCAN_TIMEOUT = 12.0
+MAC_ADDRESS_PATTERN = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+
+
+class DiscoveryUnavailableError(RuntimeError):
+    pass
+
 
 PRIVATE_NETS = [
     ipaddress.ip_network("10.0.0.0/8"),
@@ -110,52 +123,179 @@ def validate_subnet(cidr: str) -> str:
 def read_arp_table() -> list[dict]:
     results = []
     try:
-        with open("/proc/net/arp") as f:
+        with open("/proc/net/arp", encoding="ascii", errors="ignore") as f:
             for line in f.readlines()[1:]:
                 parts = line.split()
-                if len(parts) >= 4:
-                    ip, mac = parts[0], parts[3]
-                    if mac and mac != "00:00:00:00:00:00":
-                        results.append({"ip": ip, "mac": mac.upper()})
-    except FileNotFoundError:
+                if len(parts) < 6 or parts[2].lower() != "0x2":
+                    continue
+                try:
+                    address = ipaddress.ip_address(parts[0])
+                except ValueError:
+                    continue
+                mac = parts[3]
+                if (
+                    address.version == 4
+                    and MAC_ADDRESS_PATTERN.fullmatch(mac)
+                    and mac.upper() != "00:00:00:00:00:00"
+                ):
+                    results.append({"ip": str(address), "mac": mac.upper()})
+    except OSError:
         pass
     return results
 
 
-def resolve_hostname(ip: str) -> str | None:
+def resolve_hostname(ip: str, timeout: float = 0.25) -> str | None:
     try:
-        return socket.gethostbyaddr(ip)[0]
-    except Exception:
+        result = subprocess.run(
+            ["getent", "hosts", ip],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
         return None
+    if result.returncode != 0:
+        return None
+    fields = result.stdout.split()
+    return fields[1] if len(fields) > 1 and fields[1] != ip else None
 
 
-def discover_subnet(cidr: str, timeout: float = 1.0, max_hosts: int = 64) -> list[dict]:
+def _probe_host(ip: str, timeout: float) -> tuple[bool, bool, bool]:
+    try:
+        result = subprocess.run(
+            ["ping", "-n", "-c", "1", "-W", str(max(1, int(timeout))), ip],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout + 0.25,
+            check=False,
+        )
+        return result.returncode == 0, result.returncode == 1, result.returncode > 1
+    except subprocess.TimeoutExpired:
+        return False, True, False
+    except (OSError, subprocess.SubprocessError):
+        return False, False, True
+
+
+def discover_subnet(
+    cidr: str,
+    timeout: float = 1.0,
+    max_hosts: int = MAX_HOSTS_PER_SCAN,
+    *,
+    overall_timeout: float = DEFAULT_SCAN_TIMEOUT,
+    workers: int = MAX_PROBE_WORKERS,
+    resolve_hostnames: bool = False,
+    reverse_dns_timeout: float = 0.25,
+    metrics: dict | None = None,
+) -> list[dict]:
     validate_subnet(cidr)
     net = ipaddress.ip_network(cidr, strict=False)
-    found = {e["ip"]: e for e in read_arp_table()}
-    hosts = islice(net.hosts(), max_hosts)
-    for h in hosts:
-        ip = str(h)
-        try:
-            subprocess.run(
-                ["ping", "-c", "1", "-W", str(int(timeout)), ip],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=timeout + 1,
-            )
-        except Exception:
-            pass
-    for e in read_arp_table():
-        found[e["ip"]] = e
+    initial_neighbors = {entry["ip"]: entry for entry in read_arp_table()}
+    addresses = [
+        str(address)
+        for address in islice(
+            net.hosts(), max(0, min(int(max_hosts), MAX_HOSTS_PER_SCAN))
+        )
+    ]
+    host_timeout = max(0.1, float(timeout))
+    scan_deadline = monotonic() + max(0.1, float(overall_timeout))
+    probe_count = min(max(1, int(workers)), MAX_PROBE_WORKERS, len(addresses))
+    probe_futures = {}
+    completed_results = {}
+    cancelled_count = 0
+    overall_deadline_hit = False
+    pending = set()
+
+    if addresses:
+        executor = ThreadPoolExecutor(max_workers=probe_count)
+        probe_futures = {
+            executor.submit(_probe_host, address, host_timeout): address
+            for address in addresses
+        }
+        completed, pending = wait(
+            probe_futures,
+            timeout=max(0.0, scan_deadline - monotonic()),
+        )
+        overall_deadline_hit = bool(pending)
+        for future in completed:
+            completed_results[probe_futures[future]] = future.result()
+        for future in pending:
+            if future.cancel():
+                cancelled_count += 1
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    responders = {
+        address for address, (responded, _, _) in completed_results.items() if responded
+    }
+    deadline_timeout_count = max(0, len(pending) - cancelled_count)
+    timeout_count = (
+        sum(result[1] for result in completed_results.values()) + deadline_timeout_count
+    )
+    probe_errors = sum(result[2] for result in completed_results.values())
+    probes_attempted = len(probe_futures) - cancelled_count
+    current_neighbors = {entry["ip"]: entry for entry in read_arp_table()}
+    newly_observed_neighbors = {
+        ip: entry
+        for ip, entry in current_neighbors.items()
+        if entry != initial_neighbors.get(ip)
+    }
+    observed_ips = responders | {
+        ip for ip in newly_observed_neighbors if ipaddress.ip_address(ip) in net
+    }
     out = []
-    for ip, e in found.items():
-        if ipaddress.ip_address(ip) in net:
-            out.append(
-                {
-                    "ip_address": ip,
-                    "mac_address": e.get("mac"),
-                    "hostname": resolve_hostname(ip),
-                    "discovery_source": "arp",
-                }
-            )
+    for ip in sorted(observed_ips, key=ipaddress.ip_address):
+        neighbor = current_neighbors.get(ip)
+        mac_address = neighbor.get("mac") if neighbor else None
+        out.append(
+            {
+                "ip_address": ip,
+                "mac_address": mac_address,
+                "hostname": None,
+                "discovery_source": "arp" if mac_address else "lan-discovery",
+            }
+        )
+
+    if resolve_hostnames and out:
+        remaining = max(0.0, scan_deadline - monotonic())
+        dns_executor = ThreadPoolExecutor(max_workers=min(MAX_DNS_WORKERS, len(out)))
+        dns_futures = (
+            {
+                dns_executor.submit(
+                    resolve_hostname,
+                    record["ip_address"],
+                    min(max(0.01, reverse_dns_timeout), remaining),
+                ): record
+                for record in out
+            }
+            if remaining > 0
+            else {}
+        )
+        dns_completed, dns_pending = wait(dns_futures, timeout=remaining)
+        for future in dns_completed:
+            try:
+                dns_futures[future]["hostname"] = future.result()
+            except (OSError, subprocess.SubprocessError):
+                pass
+        for future in dns_pending:
+            future.cancel()
+        dns_executor.shutdown(wait=False, cancel_futures=True)
+
+    if metrics is not None:
+        metrics.update(
+            {
+                "probes_attempted": probes_attempted,
+                "hosts_responding": len(responders),
+                "timeout_count": timeout_count,
+                "probe_errors": probe_errors,
+                "partial_results": (
+                    overall_deadline_hit
+                    or cancelled_count > 0
+                    or timeout_count > 0
+                    or probe_errors > 0
+                ),
+            }
+        )
+
+    if probes_attempted and probe_errors == probes_attempted:
+        raise DiscoveryUnavailableError("No LAN probes could be started")
     return out

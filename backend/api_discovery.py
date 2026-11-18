@@ -1,14 +1,35 @@
+import logging
+import subprocess
+from time import monotonic
 from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from db.session import get_db
-from discovery.service import discover_subnet, get_local_network_info, validate_subnet
+from discovery.service import (
+    DiscoveryUnavailableError,
+    discover_subnet,
+    get_local_network_info,
+    validate_subnet,
+)
 from discovery.unified import merge_devices, upsert_inventory
 
 router = APIRouter(prefix="/api/discovery", tags=["discovery"])
 _results = []
 _router_results = []
+logger = logging.getLogger(__name__)
+
+
+def _scan_metrics(metrics: dict, duration: float) -> dict:
+    return {
+        "duration_seconds": round(duration, 3),
+        "probes_attempted": metrics.get("probes_attempted", 0),
+        "hosts_responding": metrics.get("hosts_responding", 0),
+        "timeout_count": metrics.get("timeout_count", 0),
+        "probe_errors": metrics.get("probe_errors", 0),
+        "partial_results": metrics.get("partial_results", False),
+    }
 
 
 def canonicalize_subnet(value: str) -> str:
@@ -46,11 +67,90 @@ def run_discovery(subnet: str = "192.168.1.0/24", db: Session = Depends(get_db))
     try:
         validate_subnet(subnet)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    discovered = discover_subnet(subnet)
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_subnet", "message": str(e)},
+        )
+
+    started = monotonic()
+    metrics = {}
+    logger.info("LAN discovery started subnet=%s", subnet)
+    try:
+        discovered = discover_subnet(subnet, metrics=metrics)
+    except DiscoveryUnavailableError:
+        duration = monotonic() - started
+        logger.warning(
+            "LAN discovery failed subnet=%s duration_seconds=%.3f probes_attempted=%d hosts_responding=%d partial_results=%s code=probe_unavailable",
+            subnet,
+            duration,
+            metrics.get("probes_attempted", 0),
+            metrics.get("hosts_responding", 0),
+            metrics.get("partial_results", False),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "probe_unavailable",
+                "message": "LAN probes could not be started on this host.",
+                **_scan_metrics(metrics, duration),
+            },
+        )
+    except (OSError, subprocess.SubprocessError):
+        duration = monotonic() - started
+        logger.warning(
+            "LAN discovery failed subnet=%s duration_seconds=%.3f probes_attempted=%d hosts_responding=%d partial_results=%s code=probe_failed",
+            subnet,
+            duration,
+            metrics.get("probes_attempted", 0),
+            metrics.get("hosts_responding", 0),
+            metrics.get("partial_results", False),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "probe_failed",
+                "message": "The LAN scan could not be completed by this host.",
+                **_scan_metrics(metrics, duration),
+            },
+        )
+
+    try:
+        upsert_inventory(db, discovered)
+    except SQLAlchemyError:
+        db.rollback()
+        duration = monotonic() - started
+        logger.warning(
+            "LAN discovery failed subnet=%s duration_seconds=%.3f probes_attempted=%d hosts_responding=%d partial_results=%s code=inventory_persistence_failed",
+            subnet,
+            duration,
+            metrics.get("probes_attempted", 0),
+            metrics.get("hosts_responding", 0),
+            metrics.get("partial_results", False),
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "inventory_persistence_failed",
+                "message": "Discovery completed, but inventory could not be saved.",
+                **_scan_metrics(metrics, duration),
+            },
+        )
+
     _results = discovered
-    upsert_inventory(db, discovered)
-    return {"discovered": len(discovered), "subnet": subnet}
+    duration = round(monotonic() - started, 3)
+    response = {"discovered": len(discovered), "subnet": subnet}
+    response.update(_scan_metrics(metrics, duration))
+    logger.info(
+        "LAN discovery completed subnet=%s duration_seconds=%.3f discovered=%d probes_attempted=%d hosts_responding=%d timeout_count=%d partial_results=%s",
+        subnet,
+        duration,
+        response["discovered"],
+        response["probes_attempted"],
+        response["hosts_responding"],
+        response["timeout_count"],
+        response["partial_results"],
+    )
+    return response
 
 
 @router.get("/results")

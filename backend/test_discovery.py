@@ -1,5 +1,9 @@
-import os, tempfile
+import os
+import tempfile
 import json
+import subprocess
+import threading
+from io import StringIO
 from types import SimpleNamespace
 
 import pytest
@@ -59,7 +63,8 @@ def test_nonlocal_private_subnet_requires_explicit_authorization(monkeypatch):
     )
     response = client.post("/api/discovery/run", params={"subnet": "192.168.1.0/24"})
     assert response.status_code == 400
-    assert "NETRA_AUTHORIZED_CIDRS" in response.json()["detail"]
+    assert "NETRA_AUTHORIZED_CIDRS" in response.json()["detail"]["message"]
+    assert response.json()["detail"]["code"] == "invalid_subnet"
 
 
 def test_network_info_uses_active_default_route(monkeypatch):
@@ -165,9 +170,7 @@ def test_canonicalize_subnet_handles_browser_encoding_layers():
     "query_value",
     ("192.168.88.0/24", "192.168.88.0%2F24", "192.168.88.0%252F24"),
 )
-def test_browser_lan_discovery_accepts_encoded_subnet(
-    monkeypatch, origin, query_value
-):
+def test_browser_lan_discovery_accepts_encoded_subnet(monkeypatch, origin, query_value):
     """Regression: browser query encoding must not become a 400 on the route."""
     _prepare_browser_scan(monkeypatch)
     with patch(
@@ -179,18 +182,24 @@ def test_browser_lan_discovery_accepts_encoded_subnet(
         )
 
     assert response.status_code == 200, response.text
-    assert response.json() == {"discovered": 1, "subnet": "192.168.88.0/24"}
-    scan.assert_called_once_with("192.168.88.0/24")
+    assert response.json()["discovered"] == 1
+    assert response.json()["subnet"] == "192.168.88.0/24"
+    scan.assert_called_once()
+    assert scan.call_args.args == ("192.168.88.0/24",)
+    assert isinstance(scan.call_args.kwargs["metrics"], dict)
+    assert response.json()["duration_seconds"] >= 0
+    assert response.json()["probes_attempted"] == 0
+    assert response.json()["hosts_responding"] == 0
+    assert response.json()["partial_results"] is False
     assert response.headers["access-control-allow-origin"] == origin
 
     # The frontend reads these two endpoints after a successful scan.
-    assert client.get("/api/discovery/results").json()[0]["ip_address"] == (
-        LAN_DEVICE["ip_address"]
+    assert (
+        client.get("/api/discovery/results").json()[0]["ip_address"]
+        == (LAN_DEVICE["ip_address"])
     )
     inventory = client.get("/api/devices?limit=200").json()
-    assert any(
-        device["ip_address"] == LAN_DEVICE["ip_address"] for device in inventory
-    )
+    assert any(device["ip_address"] == LAN_DEVICE["ip_address"] for device in inventory)
 
 
 @pytest.mark.parametrize("origin", BROWSER_ORIGINS)
@@ -216,8 +225,10 @@ def test_browser_lan_discovery_accepts_other_private_subnets(
         )
 
     assert response.status_code == 200, response.text
-    assert response.json() == {"discovered": 1, "subnet": subnet}
-    scan.assert_called_once_with(subnet)
+    assert response.json()["discovered"] == 1
+    assert response.json()["subnet"] == subnet
+    scan.assert_called_once()
+    assert scan.call_args.args == (subnet,)
 
 
 @pytest.mark.parametrize("origin", BROWSER_ORIGINS)
@@ -253,7 +264,8 @@ def test_browser_lan_discovery_rejects_unauthorized_subnets(
 
     assert response.status_code == 400, response.text
     assert response.headers["access-control-allow-origin"] == origin
-    assert isinstance(response.json()["detail"], str)
+    assert response.json()["detail"]["code"] == "invalid_subnet"
+    assert isinstance(response.json()["detail"]["message"], str)
     scan.assert_not_called()
 
 
@@ -285,11 +297,14 @@ def test_browser_lan_discovery_accepts_personal_subnet(
         )
 
     assert response.status_code == 200, response.text
-    assert response.json() == {"discovered": 1, "subnet": PERSONAL_SUBNET}
-    scan.assert_called_once_with(PERSONAL_SUBNET)
+    assert response.json()["discovered"] == 1
+    assert response.json()["subnet"] == PERSONAL_SUBNET
+    scan.assert_called_once()
+    assert scan.call_args.args == (PERSONAL_SUBNET,)
     assert response.headers["access-control-allow-origin"] == origin
-    assert client.get("/api/discovery/results").json()[0]["ip_address"] == (
-        PERSONAL_DEVICE["ip_address"]
+    assert (
+        client.get("/api/discovery/results").json()[0]["ip_address"]
+        == (PERSONAL_DEVICE["ip_address"])
     )
     inventory = client.get("/api/devices?limit=200").json()
     assert any(
@@ -301,22 +316,15 @@ def test_personal_scan_preserves_other_subnet_inventory(monkeypatch):
     """Upserts refresh matching devices without deleting other-subnet records."""
     _prepare_browser_scan(monkeypatch, "192.168.88.0/24")
     with patch("api_discovery.discover_subnet", return_value=[dict(LAN_DEVICE)]):
-        client.post(
-            "/api/discovery/run", params={"subnet": "192.168.88.0/24"}
-        )
+        client.post("/api/discovery/run", params={"subnet": "192.168.88.0/24"})
 
     _prepare_browser_scan(monkeypatch, PERSONAL_SUBNET)
-    with patch(
-        "api_discovery.discover_subnet", return_value=[dict(PERSONAL_DEVICE)]
-    ):
-        response = client.post(
-            "/api/discovery/run", params={"subnet": PERSONAL_SUBNET}
-        )
+    with patch("api_discovery.discover_subnet", return_value=[dict(PERSONAL_DEVICE)]):
+        response = client.post("/api/discovery/run", params={"subnet": PERSONAL_SUBNET})
 
     assert response.status_code == 200, response.text
     inventory_ips = {
-        device["ip_address"]
-        for device in client.get("/api/devices?limit=200").json()
+        device["ip_address"] for device in client.get("/api/devices?limit=200").json()
     }
     assert LAN_DEVICE["ip_address"] in inventory_ips
     assert PERSONAL_DEVICE["ip_address"] in inventory_ips
@@ -333,3 +341,209 @@ def test_ipv6_loopback_origin_preflight_allowed():
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://[::1]:5173"
+
+
+def _prepare_service_scan(monkeypatch, subnet="192.168.1.5/32"):
+    monkeypatch.setenv("NETRA_AUTHORIZED_CIDRS", subnet)
+    monkeypatch.setattr(
+        svc,
+        "get_local_network_info",
+        lambda: {"subnet": None, "gateway": None, "ip_address": None},
+    )
+    monkeypatch.setattr(svc, "read_arp_table", lambda: [])
+
+
+def test_read_neighbor_table_accepts_only_complete_valid_macs(monkeypatch):
+    table = """IP address       HW type     Flags       HW address            Mask     Device
+192.168.1.5      0x1        0x2         aa:bb:cc:dd:ee:ff     *        wlan0
+192.168.1.6      0x1        0x0         11:22:33:44:55:66     *        wlan0
+192.168.1.7      0x1        0x2         00:00:00:00:00:00     *        wlan0
+192.168.1.8      0x1        0x2         invalid               *        wlan0
+"""
+    monkeypatch.setattr("builtins.open", lambda *args, **kwargs: StringIO(table))
+
+    assert svc.read_arp_table() == [{"ip": "192.168.1.5", "mac": "AA:BB:CC:DD:EE:FF"}]
+
+
+def test_discovery_uses_bounded_workers_and_caps_hosts(monkeypatch):
+    _prepare_service_scan(monkeypatch, "192.168.0.0/16")
+    active = 0
+    peak_active = 0
+    lock = threading.Lock()
+    barrier = threading.Barrier(svc.MAX_PROBE_WORKERS)
+
+    def fake_probe(ip, timeout):
+        nonlocal active, peak_active
+        with lock:
+            active += 1
+            peak_active = max(peak_active, active)
+        barrier.wait(timeout=2)
+        with lock:
+            active -= 1
+        return True, False, False
+
+    monkeypatch.setattr(svc, "_probe_host", fake_probe)
+    metrics = {}
+    devices = svc.discover_subnet(
+        "192.168.0.0/16",
+        max_hosts=500,
+        workers=500,
+        overall_timeout=3,
+        metrics=metrics,
+    )
+
+    assert peak_active == svc.MAX_PROBE_WORKERS
+    assert len(devices) == svc.MAX_HOSTS_PER_SCAN
+    assert metrics["probes_attempted"] == svc.MAX_HOSTS_PER_SCAN
+    assert metrics["hosts_responding"] == svc.MAX_HOSTS_PER_SCAN
+
+
+def test_host_timeout_is_counted_and_returns_partial_results(monkeypatch):
+    _prepare_service_scan(monkeypatch)
+
+    def time_out_probe(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
+
+    monkeypatch.setattr(svc.subprocess, "run", time_out_probe)
+    metrics = {}
+    devices = svc.discover_subnet(
+        "192.168.1.5/32", timeout=0.1, overall_timeout=1, metrics=metrics
+    )
+
+    assert devices == []
+    assert metrics["timeout_count"] == 1
+    assert metrics["partial_results"] is True
+
+
+def test_ping_no_reply_exit_code_counts_as_timeout(monkeypatch):
+    monkeypatch.setattr(
+        svc.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=1),
+    )
+
+    assert svc._probe_host("192.168.1.5", 1.0) == (False, True, False)
+
+
+def test_overall_deadline_returns_partial_results(monkeypatch):
+    _prepare_service_scan(monkeypatch)
+    release_probe = threading.Event()
+
+    def slow_probe(ip, timeout):
+        release_probe.wait(timeout=2)
+        return True, False, False
+
+    monkeypatch.setattr(svc, "_probe_host", slow_probe)
+    metrics = {}
+    try:
+        devices = svc.discover_subnet(
+            "192.168.1.5/32", overall_timeout=0.1, metrics=metrics
+        )
+    finally:
+        release_probe.set()
+
+    assert devices == []
+    assert metrics["probes_attempted"] == 1
+    assert metrics["timeout_count"] == 1
+    assert metrics["partial_results"] is True
+
+
+def test_stale_neighbor_is_not_a_new_discovery(monkeypatch):
+    _prepare_service_scan(monkeypatch)
+    stale = {"ip": "192.168.1.5", "mac": "AA:BB:CC:DD:EE:FF"}
+    monkeypatch.setattr(svc, "read_arp_table", lambda: [dict(stale)])
+    monkeypatch.setattr(svc, "_probe_host", lambda *args: (False, False, False))
+
+    assert svc.discover_subnet("192.168.1.5/32") == []
+
+
+def test_new_neighbor_is_associated_and_hostname_remains_unknown(monkeypatch):
+    _prepare_service_scan(monkeypatch)
+    neighbor = {"ip": "192.168.1.5", "mac": "AA:BB:CC:DD:EE:FF"}
+    observations = iter([[], [neighbor]])
+    monkeypatch.setattr(svc, "read_arp_table", lambda: next(observations))
+    monkeypatch.setattr(svc, "_probe_host", lambda *args: (False, False, False))
+    monkeypatch.setattr(
+        svc,
+        "resolve_hostname",
+        lambda *args: (_ for _ in ()).throw(AssertionError("unexpected lookup")),
+    )
+
+    devices = svc.discover_subnet("192.168.1.5/32")
+
+    assert devices == [
+        {
+            "ip_address": "192.168.1.5",
+            "mac_address": "AA:BB:CC:DD:EE:FF",
+            "hostname": None,
+            "discovery_source": "arp",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        subprocess.TimeoutExpired("getent", 0.01),
+        FileNotFoundError("getent"),
+    ],
+)
+def test_reverse_dns_timeout_and_failure_are_unknown(monkeypatch, failure):
+    def fail_lookup(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(svc.subprocess, "run", fail_lookup)
+
+    assert svc.resolve_hostname("192.168.1.5", timeout=0.01) is None
+
+
+def test_probe_failure_returns_sanitized_structured_error(monkeypatch):
+    _prepare_browser_scan(monkeypatch)
+    with patch(
+        "api_discovery.discover_subnet",
+        side_effect=api_discovery.DiscoveryUnavailableError(
+            "private subprocess details"
+        ),
+    ):
+        response = client.post(
+            "/api/discovery/run", params={"subnet": "192.168.88.0/24"}
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "probe_unavailable"
+    assert response.json()["detail"]["message"] == (
+        "LAN probes could not be started on this host."
+    )
+    assert response.json()["detail"]["partial_results"] is False
+    assert "private subprocess details" not in response.text
+
+
+def test_discovery_api_returns_scan_telemetry(monkeypatch):
+    _prepare_browser_scan(monkeypatch)
+
+    def fake_discover(subnet, *, metrics):
+        metrics.update(
+            probes_attempted=4,
+            hosts_responding=2,
+            timeout_count=1,
+            probe_errors=0,
+            partial_results=True,
+        )
+        return [dict(LAN_DEVICE)]
+
+    with patch("api_discovery.discover_subnet", side_effect=fake_discover):
+        response = client.post(
+            "/api/discovery/run", params={"subnet": "192.168.88.0/24"}
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "discovered": 1,
+        "subnet": "192.168.88.0/24",
+        "duration_seconds": response.json()["duration_seconds"],
+        "probes_attempted": 4,
+        "hosts_responding": 2,
+        "timeout_count": 1,
+        "probe_errors": 0,
+        "partial_results": True,
+    }

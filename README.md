@@ -191,7 +191,27 @@ Set `VITE_API_BASE_URL` in the frontend environment to use a different backend (
 ```bash
 cd backend
 python3 -m pytest -q
+cd ../frontend
+npm test
+npm run build
 ```
+
+### LAN Discovery
+
+LAN Discovery is manual and read-only. The backend accepts only authorized
+private IPv4 subnets, probes at most 64 hosts with at most eight concurrent
+single-packet ICMP probes, and applies a 1.25-second per-host process deadline
+plus a 12-second overall scan deadline. Timed-out work returns partial results
+when possible. Results include scan duration, attempted probes, responding
+hosts, timeouts, probe errors, and partial-result status.
+
+Only successful ICMP replies and newly observed Linux neighbor entries are
+reported. Existing unchanged neighbor-cache entries are not treated as fresh
+discoveries. MAC addresses come only from complete neighbor entries; reverse
+DNS is disabled by default, and hostnames and vendors remain unknown unless
+another configured source provides evidence. See
+[Discovery API details](docs/API_REFERENCE.md#lan-discovery) and the
+[hardware benchmark](docs/HARDWARE_TEST_RESULTS.md#bounded-concurrent-discovery-benchmark).
 
 ### Real DNS provider (AdGuard Home)
 

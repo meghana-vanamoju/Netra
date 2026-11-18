@@ -60,21 +60,30 @@ verification, and recovery APIs.
 | `GET /api/devices?limit=200&offset=0` | Array of device records; the UI searches and paginates the returned first 200 locally. |
 | `GET /api/classifications` | Array of `{ "device_id": number, "category": string, "confidence": number, "reasons": string[], "vendor_identified": boolean }`. |
 | `POST /api/devices/{device_id}/classify` | Recalculates and returns one device's classification; it does not persist the result. The UI only calls this after the user requests recalculation in device details. |
-| `POST /api/discovery/run?subnet={cidr}` | `{ "discovered": number, "subnet": string }`. Requires a private IPv4 subnet within the active network or `NETRA_AUTHORIZED_CIDRS`, capped at `/16`, then synchronously scans and registers discoveries. |
+| `POST /api/discovery/run?subnet={cidr}` | `{ "discovered": number, "subnet": string, "duration_seconds": number, "probes_attempted": number, "hosts_responding": number, "timeout_count": number, "probe_errors": number, "partial_results": boolean }`. Requires a private IPv4 subnet within the active network or `NETRA_AUTHORIZED_CIDRS`, capped at `/16`; scan records are persisted to inventory. |
 | `GET /api/discovery/network` | `{ "interface": string \| null, "ip_address": string \| null, "gateway": string \| null, "subnet": string \| null }`; reads the active default route and interface address when Linux `ip` is available. |
 | `POST /api/router/test?ip={ipv4}` | `{ "ip": string, "reachable": boolean, "network_reachable": boolean, "management_interface_available": boolean }`; `reachable` means local neighbor evidence only, not management support. |
 | `GET /api/router/capabilities?ip={ipv4}` | Reports implemented capabilities and whether an exact-IP AdGuard Home adapter is configured. Generic open ports do not imply router support. |
 | `POST /api/router/devices?ip={ipv4}` | `{ "router_ip": string, "status": string, "authentication_required": boolean \| string, "devices": [...] }`; uses only explicitly configured AdGuard Home built-in DHCP leases. Successful records update the device inventory. |
 | `GET /api/discovery/results` | Latest in-memory LAN results merged with the most recent router records. Each record includes `ip_address`, nullable `mac_address`/`hostname`, `discovery_source`, and merged `sources`. |
 
-Discovery only runs after a user action. The backend probes at most 64 host
-addresses inside the selected authorized private subnet and reads its local
-neighbor table. Current results are process-local and may be lost on backend
-restart; persistent device records remain available through `/api/devices`. A
-zero result is not proof that the subnet has no devices. Client isolation,
-permissions, and host firewall behavior can limit visibility. Configure
-`NETRA_AUTHORIZED_CIDRS` on the backend to allow private networks other than
-the active interface subnet.
+Discovery only runs after a user action. It uses no more than eight concurrent
+single-packet ICMP probes, a 1.25-second per-host process deadline, and a
+12-second overall scan deadline; no more than 64 hosts are attempted. Partial
+results can be returned at the overall deadline. An ICMP no-reply is counted as
+a timeout, not proof that a device is absent. The backend reports successful
+ICMP responders and newly observed Linux neighbor entries; unchanged cached
+entries are not treated as new discoveries. MAC addresses require a complete
+neighbor-table entry. Reverse DNS is disabled by default, and missing hostnames
+or vendor details remain unknown. Current results are process-local and may be
+lost on backend restart; persistent device records remain available through
+`/api/devices`. Client isolation, permissions, and host firewall behavior can
+limit visibility. Configure `NETRA_AUTHORIZED_CIDRS` on the backend to allow
+private networks other than the active interface subnet.
+
+Invalid subnets return HTTP 400 with a structured `detail.code` and
+`detail.message`. Probe or inventory failures return a sanitized HTTP 503
+response with the same error fields and available scan telemetry.
 
 The supported router adapter is restricted to AdGuard Home's documented
 `GET /control/dhcp/status` API. It maps dynamic/static lease IP, MAC, hostname,

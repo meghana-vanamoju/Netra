@@ -44,6 +44,12 @@ export type DiscoveryResult = {
 export type DiscoveryResponse = {
   discovered: number;
   subnet: string;
+  duration_seconds?: number;
+  probes_attempted?: number;
+  hosts_responding?: number;
+  timeout_count?: number;
+  probe_errors?: number;
+  partial_results?: boolean;
 };
 
 export type LocalNetworkInfo = {
