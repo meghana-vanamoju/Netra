@@ -114,6 +114,112 @@ def test_discovery_cors_preflight():
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_lan_results_do_not_include_router_inventory(monkeypatch):
+    import api_discovery
+
+    api_discovery._results_by_subnet = {
+        "192.168.88.0/24": [
+            {
+                "ip_address": "192.168.88.10",
+                "mac_address": "AA:BB",
+                "discovery_source": "lan-discovery",
+            }
+        ]
+    }
+    api_discovery._router_results = [
+        {
+            "ip_address": "192.168.88.1",
+            "mac_address": "CC:DD",
+            "discovery_source": "router:adguard-home",
+        }
+    ]
+
+    response = client.get(
+        "/api/discovery/results", params={"subnet": "192.168.88.0/24"}
+    )
+
+    assert response.status_code == 200
+    assert [item["ip_address"] for item in response.json()] == ["192.168.88.10"]
+
+
+def test_router_inventory_is_not_in_lan_subnet_results(monkeypatch):
+    import api_discovery
+
+    api_discovery._results_by_subnet = {
+        "192.168.88.0/24": [
+            {
+                "ip_address": "192.168.88.10",
+                "mac_address": "AA:BB",
+                "discovery_source": "lan-discovery",
+            }
+        ]
+    }
+    api_discovery._router_results = [
+        {
+            "ip_address": "192.168.88.1",
+            "mac_address": "CC:DD",
+            "discovery_source": "router:adguard-home",
+        }
+    ]
+
+    response = client.get(
+        "/api/discovery/results", params={"subnet": "192.168.88.0/24"}
+    )
+
+    assert all(item["discovery_source"].startswith("lan") for item in response.json())
+
+
+def test_router_only_inventory_is_excluded_from_lan_results(monkeypatch):
+    import api_discovery
+
+    api_discovery._results_by_subnet = {"192.168.88.0/24": []}
+    api_discovery._router_results = [
+        {
+            "ip_address": "192.168.88.1",
+            "mac_address": "CC:DD",
+            "discovery_source": "router:adguard-home",
+        }
+    ]
+
+    response = client.get(
+        "/api/discovery/results", params={"subnet": "192.168.88.0/24"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_two_subnets_keep_independent_current_snapshots(monkeypatch):
+    import api_discovery
+
+    api_discovery._results_by_subnet = {
+        "192.168.88.0/24": [
+            {
+                "ip_address": "192.168.88.10",
+                "mac_address": "AA:BB",
+                "discovery_source": "lan-discovery",
+            }
+        ],
+        "192.168.29.0/24": [
+            {
+                "ip_address": "192.168.29.10",
+                "mac_address": "11:22",
+                "discovery_source": "lan-discovery",
+            }
+        ],
+    }
+
+    office = client.get(
+        "/api/discovery/results", params={"subnet": "192.168.88.0/24"}
+    ).json()
+    personal = client.get(
+        "/api/discovery/results", params={"subnet": "192.168.29.0/24"}
+    ).json()
+
+    assert [item["ip_address"] for item in office] == ["192.168.88.10"]
+    assert [item["ip_address"] for item in personal] == ["192.168.29.10"]
+
+
 def test_empty_scan_replaces_current_results(monkeypatch):
     import api_discovery
 
@@ -540,10 +646,149 @@ def test_discovery_api_returns_scan_telemetry(monkeypatch):
     assert response.json() == {
         "discovered": 1,
         "subnet": "192.168.88.0/24",
+        "scan_status": "partial",
         "duration_seconds": response.json()["duration_seconds"],
         "probes_attempted": 4,
         "hosts_responding": 2,
         "timeout_count": 1,
         "probe_errors": 0,
         "partial_results": True,
+        "coverage": {
+            "hosts_in_subnet": 0,
+            "hosts_probed": 0,
+            "coverage_complete": True,
+            "unprobed_hosts": 0,
+        },
+        "last_scan_at": response.json()["last_scan_at"],
     }
+
+
+def test_live_snapshot_replaces_previous_subnet_snapshot(monkeypatch):
+    from db.session import get_session_factory
+    from discovery.unified import replace_discovery_snapshot
+
+    monkeypatch.setenv("NETRA_AUTHORIZED_CIDRS", "192.168.88.0/24")
+    db = get_session_factory()()
+    try:
+        replace_discovery_snapshot(
+            db,
+            "192.168.88.0/24",
+            [
+                {
+                    "ip_address": "192.168.88.10",
+                    "mac_address": "AA:BB:CC:DD:EE:10",
+                    "hostname": "first",
+                    "discovery_source": "lan-discovery",
+                }
+            ],
+        )
+        replace_discovery_snapshot(
+            db,
+            "192.168.88.0/24",
+            [
+                {
+                    "ip_address": "192.168.88.11",
+                    "mac_address": "AA:BB:CC:DD:EE:11",
+                    "hostname": "second",
+                    "discovery_source": "lan-discovery",
+                }
+            ],
+        )
+    finally:
+        db.close()
+
+    live = client.get(
+        "/api/devices", params={"live": "true", "subnet": "192.168.88.0/24"}
+    )
+    assert live.status_code == 200
+    assert [item["ip_address"] for item in live.json()] == ["192.168.88.11"]
+
+
+def test_partial_scan_keeps_unobserved_history_without_offline_claim(monkeypatch):
+    from db.session import get_session_factory
+    from discovery.unified import replace_discovery_snapshot
+
+    monkeypatch.setenv("NETRA_AUTHORIZED_CIDRS", "192.168.88.0/24")
+    db = get_session_factory()()
+    try:
+        replace_discovery_snapshot(
+            db,
+            "192.168.88.0/24",
+            [
+                {
+                    "ip_address": "192.168.88.20",
+                    "mac_address": "AA:BB:CC:DD:EE:20",
+                    "hostname": "known",
+                    "discovery_source": "lan-discovery",
+                }
+            ],
+        )
+        replace_discovery_snapshot(
+            db,
+            "192.168.88.0/24",
+            [
+                {
+                    "ip_address": "192.168.88.21",
+                    "mac_address": "AA:BB:CC:DD:EE:21",
+                    "hostname": None,
+                    "discovery_source": "lan-discovery",
+                }
+            ],
+            scan_partial=True,
+        )
+    finally:
+        db.close()
+
+    historical = client.get("/api/devices", params={"subnet": "192.168.88.0/24"}).json()
+    known = next(item for item in historical if item["ip_address"] == "192.168.88.20")
+    assert known["is_current"] is True
+    assert known["metadata"]["partial_scan_subnet"] == "192.168.88.0/24"
+    assert known["metadata"]["scan_completeness"] == "partial"
+
+
+def test_coverage_preserves_unprobed_current_device():
+    from db.models import Device
+    from db.session import get_session_factory
+    from discovery.unified import replace_discovery_snapshot
+
+    db = get_session_factory()()
+    try:
+        device = Device(
+            ip_address="192.168.1.65",
+            mac_address="AA:BB:CC:DD:EE:65",
+            hostname="unprobed",
+            discovery_source="lan-discovery",
+            is_current=True,
+            network_subnet="192.168.1.0/24",
+        )
+        db.add(device)
+        db.commit()
+
+        replace_discovery_snapshot(
+            db,
+            "192.168.1.0/24",
+            [
+                {
+                    "ip_address": "192.168.1.10",
+                    "mac_address": "AA:BB:CC:DD:EE:10",
+                    "hostname": "probed",
+                    "discovery_source": "lan-discovery",
+                }
+            ],
+            scan_partial=False,
+            probed_addresses={f"192.168.1.{i}" for i in range(1, 65)},
+            coverage_complete=False,
+        )
+    finally:
+        db.close()
+
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app)
+    devices = client.get(
+        "/api/devices", params={"subnet": "192.168.1.0/24"}
+    ).json()
+    unprobed = next(item for item in devices if item["ip_address"] == "192.168.1.65")
+    assert unprobed["is_current"] is True
+    assert unprobed["metadata"]["scan_completeness"] == "not_probed"

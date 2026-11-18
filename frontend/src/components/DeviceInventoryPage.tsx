@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyDevice, getClassifications, getDevices } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
 import { LocalizedTree } from "../localization";
+import { useNetworkContext } from "../NetworkContext";
 import type {
   ApiError,
   Device,
@@ -58,6 +59,7 @@ function DeviceDetails({
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const { selectedDeviceId, setSelectedDeviceId } = useNetworkContext();
   const [classifying, setClassifying] = useState(false);
   const [classificationError, setClassificationError] = useState<ApiError | null>(null);
 
@@ -123,6 +125,22 @@ function DeviceDetails({
           </dl>
         </section>
 
+        <section className="dialog-section" aria-labelledby="context-title">
+          <h3 id="context-title">Selected context</h3>
+          <p className="muted-copy">
+            {selectedDeviceId === device.id
+              ? "This device is the selected context for DNS, audit, policy and enforcement pages."
+              : "Use this device as the selected context for DNS, audit, policy and enforcement pages."}
+          </p>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setSelectedDeviceId(selectedDeviceId === device.id ? null : device.id)}
+          >
+            {selectedDeviceId === device.id ? "Clear selected device" : "Use for context"}
+          </button>
+        </section>
+
         <section className="dialog-section" aria-labelledby="classification-title">
           <h3 id="classification-title">Classification</h3>
           <button
@@ -185,6 +203,7 @@ function DeviceDetails({
 }
 
 export function DeviceInventoryPage() {
+  const { selectedSubnet, selectedDeviceId, setSelectedDeviceId } = useNetworkContext();
   const [devices, setDevices] = useState<ResourceState<Device[]>>({ status: "loading" });
   const [classifications, setClassifications] = useState<
     ResourceState<DeviceClassification[]>
@@ -203,7 +222,7 @@ export function DeviceInventoryPage() {
   const loadInventory = useCallback(async () => {
     setDevices({ status: "loading" });
     const [deviceResult, classificationResult] = await Promise.allSettled([
-      getDevices(),
+      getDevices({ live: true, subnet: selectedSubnet ?? undefined }),
       getClassifications(),
     ]);
 
@@ -217,11 +236,20 @@ export function DeviceInventoryPage() {
         ? { status: "ready", data: classificationResult.value }
         : { status: "error", error: toApiError(classificationResult.reason) },
     );
-  }, []);
+  }, [selectedSubnet]);
 
   useEffect(() => {
     void loadInventory();
   }, [loadInventory]);
+
+  useEffect(() => {
+    if (devices.status !== "ready") {
+      return;
+    }
+    if (selectedDeviceId !== null && !devices.data.some((device) => device.id === selectedDeviceId)) {
+      setSelectedDeviceId(null);
+    }
+  }, [devices, selectedDeviceId, setSelectedDeviceId]);
 
   useEffect(() => {
     const refresh = () => void loadInventory();
@@ -376,8 +404,14 @@ export function DeviceInventoryPage() {
             <div className="eyebrow"><span className="eyebrow-line" /> NETWORK INVENTORY</div>
             <h1>Connected <span>devices.</span></h1>
             <p className="page-description">
-              Review known devices and the evidence behind their classifications.
+              Live discovery snapshot only. Historical records remain preserved in the backend and are not shown as currently connected.
             </p>
+            {selectedSubnet && (
+              <p className="muted-copy">
+                Selected network: <span data-no-translate="true">{selectedSubnet}</span>
+                {selectedDeviceId !== null ? ` · selected device #${selectedDeviceId}` : " · all devices in this network"}
+              </p>
+            )}
           </div>
           <button
             className="refresh-button"

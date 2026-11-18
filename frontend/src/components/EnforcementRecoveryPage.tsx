@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ApiRequestError,
+  applyPolicy,
+  getEnforcementReadiness,
   getEnforcementStatus,
   getPolicies,
   getPolicyApprovalStatus,
@@ -10,11 +12,14 @@ import {
   getRecoveryStatus,
   getSnapshot,
   getSnapshots,
+  rollbackSnapshot,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
 import { LocalizedTree } from "../localization";
+import { useNetworkContext } from "../NetworkContext";
 import type {
   ApiError,
+  EnforcementReadiness,
   EnforcementStatus,
   PolicyApprovalStatus,
   PolicyExecutionStatus,
@@ -217,7 +222,7 @@ function PolicyStatusDetails({
                 <div><dt>Backend rollback-ready flag</dt><dd>{value.rollback.data.rollback_ready ? "Yes" : "No"}</dd></div>
               </dl>
               <p className="enforcement-explanation">
-                This is a status flag only. The snapshot rollback endpoint is not implemented and no rollback action is available here.
+                This status flag is separate from the controlled rollback action below, which requires a valid snapshot and explicit confirmation.
               </p>
             </>
           )}
@@ -229,7 +234,11 @@ function PolicyStatusDetails({
 }
 
 export function EnforcementRecoveryPage() {
+  const { selectedSubnet, selectedDeviceId, clearNetworkContext } = useNetworkContext();
   const [enforcement, setEnforcement] = useState<ResourceState<EnforcementStatus>>({
+    status: "loading",
+  });
+  const [readiness, setReadiness] = useState<ResourceState<EnforcementReadiness>>({
     status: "loading",
   });
   const [recovery, setRecovery] = useState<ResourceState<RecoveryStatus>>({
@@ -247,21 +256,31 @@ export function EnforcementRecoveryPage() {
   });
   const [policyId, setPolicyId] = useState("");
   const [policyStatus, setPolicyStatus] = useState<PolicyStatusData | null>(null);
+  const [applyConfirm, setApplyConfirm] = useState(false);
+  const [applyResult, setApplyResult] = useState<Record<string, unknown> | null>(null);
+  const [applyError, setApplyError] = useState<ApiError | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [rollbackConfirm, setRollbackConfirm] = useState(false);
+  const [rollbackResult, setRollbackResult] = useState<Record<string, unknown> | null>(null);
+  const [rollbackError, setRollbackError] = useState<ApiError | null>(null);
+  const [rollingBack, setRollingBack] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
     setEnforcement({ status: "loading" });
+    setReadiness({ status: "loading" });
     setRecovery({ status: "loading" });
     setSnapshots({ status: "loading" });
     setPolicies({ status: "loading" });
 
     void Promise.allSettled([
       getEnforcementStatus(),
+      getEnforcementReadiness(),
       getRecoveryStatus(),
       getSnapshots(),
       getPolicies(),
-    ]).then(([enforcementResult, recoveryResult, snapshotsResult, policiesResult]) => {
+    ]).then(([enforcementResult, readinessResult, recoveryResult, snapshotsResult, policiesResult]) => {
       if (!active) {
         return;
       }
@@ -269,6 +288,11 @@ export function EnforcementRecoveryPage() {
         enforcementResult.status === "fulfilled"
           ? { status: "ready", data: enforcementResult.value }
           : { status: "error", error: toApiError(enforcementResult.reason) },
+      );
+      setReadiness(
+        readinessResult.status === "fulfilled"
+          ? { status: "ready", data: readinessResult.value }
+          : { status: "error", error: toApiError(readinessResult.reason) },
       );
       setRecovery(
         recoveryResult.status === "fulfilled"
@@ -395,15 +419,51 @@ export function EnforcementRecoveryPage() {
     [snapshotId, snapshots],
   );
 
+  const handleApply = async () => {
+    if (!policyId || !applyConfirm) {
+      return;
+    }
+    setApplying(true);
+    setApplyError(null);
+    setApplyResult(null);
+    try {
+      const result = await applyPolicy(Number(policyId));
+      setApplyResult(result);
+      setReloadVersion((version) => version + 1);
+    } catch (error) {
+      setApplyError(toApiError(error));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (!snapshotId || !rollbackConfirm) {
+      return;
+    }
+    setRollingBack(true);
+    setRollbackError(null);
+    setRollbackResult(null);
+    try {
+      const result = await rollbackSnapshot(Number(snapshotId), true);
+      setRollbackResult(result);
+      setReloadVersion((version) => version + 1);
+    } catch (error) {
+      setRollbackError(toApiError(error));
+    } finally {
+      setRollingBack(false);
+    }
+  };
+
   return (
     <LocalizedTree>
     <section className="enforcement-page">
       <div className="page-heading">
         <div>
           <div className="eyebrow"><span className="eyebrow-line" /> OPERATIONS STATUS</div>
-          <h1>Enforcement <span>&amp; recovery.</span></h1>
+          <h1>Enforcement <span>readiness.</span></h1>
           <p className="page-description">
-            Inspect backend-reported policy, verification, snapshot, and recovery state.
+            Inspect gateway, permission and provider capability evidence before any consent-gated apply, verify or rollback action.
           </p>
         </div>
         <button
@@ -412,6 +472,7 @@ export function EnforcementRecoveryPage() {
           onClick={() => setReloadVersion((version) => version + 1)}
           disabled={
             enforcement.status === "loading" ||
+            readiness.status === "loading" ||
             recovery.status === "loading" ||
             snapshots.status === "loading" ||
             policies.status === "loading"
@@ -425,9 +486,18 @@ export function EnforcementRecoveryPage() {
       <div className="enforcement-safety-note">
         <Icon name="alert" size={16} />
         <span>
-          Status responses do not prove that DNS traffic is being filtered. This page performs read-only status and snapshot reads; it does not approve, apply, enforce, create snapshots, or attempt recovery.
+          Status responses do not prove that DNS traffic is being filtered. Controlled apply and rollback actions below require explicit confirmation and provider verification; no action is performed automatically.
         </span>
       </div>
+      {(selectedSubnet || selectedDeviceId !== null) && (
+        <div className="enforcement-context-note" role="status">
+          Active context: {selectedSubnet ? <span data-no-translate="true">{selectedSubnet}</span> : "all networks"}
+          {selectedDeviceId !== null ? ` · device #${selectedDeviceId}` : " · all devices"}
+          <button type="button" className="secondary-button" onClick={() => clearNetworkContext()}>
+            Clear device selection
+          </button>
+        </div>
+      )}
 
       <section className="enforcement-overview-grid" aria-label="Backend operational status">
         <article className="panel enforcement-overview-card">
@@ -451,7 +521,7 @@ export function EnforcementRecoveryPage() {
               </div>
               <p className="enforcement-explanation">
                 {enforcement.data.available
-                  ? "The API reports a configured backend only. Its adapter does not implement policy application; traffic protection is not confirmed."
+                  ? "A configured backend is available. Policy application still requires approval, dry-run, opt-in enforcement and provider verification; traffic protection is not assumed."
                   : "The API reports no configured DNS backend. No enforcement capability is available."}
               </p>
             </>
@@ -485,6 +555,68 @@ export function EnforcementRecoveryPage() {
         </article>
       </section>
 
+      <section className="panel enforcement-readiness-panel">
+        <div className="panel-header">
+          <div>
+            <div className="panel-kicker">CAPABILITY AUDIT</div>
+            <h2>Enforcement readiness</h2>
+          </div>
+          <span className={`read-only-tag${readiness.status === "ready" && readiness.data.provider_ready ? "" : " unavailable"}`}>
+            {readiness.status === "ready"
+              ? readiness.data.provider_ready
+                ? "PROVIDER READY"
+                : "PROVIDER NOT READY"
+              : "CHECKING"}
+          </span>
+        </div>
+        {readiness.status === "loading" ? (
+          <div className="panel-state"><LoadingValue /><span>Checking gateway, permissions and provider modes…</span></div>
+        ) : readiness.status === "error" ? (
+          <ErrorMessage error={readiness.error} />
+        ) : (
+          <>
+            <div className="enforcement-readiness-grid">
+              <div className="enforcement-readiness-column">
+                <h3>Local network</h3>
+                <dl className="enforcement-data-list">
+                  <div><dt>Interface</dt><dd data-no-translate="true">{readiness.data.local_network.interface ?? "unknown"}</dd></div>
+                  <div><dt>Local IP</dt><dd data-no-translate="true">{readiness.data.local_network.ip_address ?? "unknown"}</dd></div>
+                  <div><dt>Gateway</dt><dd data-no-translate="true">{readiness.data.local_network.gateway ?? "unknown"}</dd></div>
+                  <div><dt>Subnet</dt><dd data-no-translate="true">{readiness.data.local_network.subnet ?? "unknown"}</dd></div>
+                </dl>
+                <h3>Required permissions</h3>
+                <ul className="enforcement-readiness-list">
+                  {readiness.data.required_permissions.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </div>
+              <div className="enforcement-readiness-column">
+                <h3>Supported modes</h3>
+                <ul className="enforcement-readiness-list">
+                  {readiness.data.supported_modes.map((item) => (
+                    <li key={item.mode}>
+                      <strong>{item.mode}</strong> · {item.supported ? "supported" : "unavailable"} · {item.scope}
+                    </li>
+                  ))}
+                </ul>
+                <h3>Unsupported modes</h3>
+                <ul className="enforcement-readiness-list">
+                  {readiness.data.unsupported_modes.map((item) => (
+                    <li key={item.mode}><strong>{item.mode}</strong> · {item.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="enforcement-readiness-alerts">
+              <p><strong>Network-wide readiness:</strong> {readiness.data.network_wide_ready ? "Ready" : "Not verified"}</p>
+              <p><strong>Snapshot records:</strong> {readiness.data.snapshot_count}</p>
+              {readiness.data.warnings.map((warning) => (
+                <p key={warning} className="warning-text">{warning}</p>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
       <section className="panel enforcement-policy-select-panel">
         <div className="panel-header">
           <div>
@@ -510,9 +642,7 @@ export function EnforcementRecoveryPage() {
               <select value={policyId} onChange={(event) => setPolicyId(event.target.value)}>
                 {policies.data.map((policy) => (
                   <option value={policy.id} key={policy.id}>
-                    {policy.name
-                      ? <span data-no-translate="true">{policy.name}</span>
-                      : "Unnamed policy"} · #{policy.id} · {policy.status || "Unknown status"}
+                    {policy.name || "Unnamed policy"} · #{policy.id} · {policy.status || "Unknown status"}
                   </option>
                 ))}
               </select>
@@ -600,8 +730,91 @@ export function EnforcementRecoveryPage() {
         )}
       </section>
 
+      <section className="panel enforcement-policy-select-panel">
+        <div className="panel-header">
+          <div>
+            <div className="panel-kicker">CONTROLLED ACTIONS</div>
+            <h2>Consent-gated apply and rollback</h2>
+          </div>
+          <span className="read-only-tag">EXPLICIT CONFIRMATION REQUIRED</span>
+        </div>
+        <p className="enforcement-explanation">
+          Apply requires an approved policy with a linked dry-run plan, a configured DNS provider,
+          and <code>NETRA_DNS_ENFORCEMENT_ENABLED=true</code>. Rollback requires a valid snapshot.
+        </p>
+        <label className="filter-control enforcement-policy-select">
+          <span>Select saved policy</span>
+          <select value={policyId} onChange={(event) => setPolicyId(event.target.value)}>
+            <option value="">Choose a policy</option>
+            {policies.status === "ready" &&
+              policies.data.map((policy) => (
+                <option value={policy.id} key={policy.id}>
+                  {policy.name || "Unnamed policy"} · #{policy.id} · {policy.status || "Unknown status"}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="filter-control">
+          <input
+            type="checkbox"
+            checked={applyConfirm}
+            onChange={(event) => setApplyConfirm(event.target.checked)}
+          />
+          I confirm that this policy may change DNS filtering rules.
+        </label>
+        <button
+          className="primary-button"
+          type="button"
+          disabled={!policyId || !applyConfirm || applying}
+          onClick={() => void handleApply()}
+        >
+          {applying ? "Applying…" : "Apply selected policy"}
+        </button>
+        {applyError && <ErrorMessage error={applyError} />}
+        {applyResult && (
+          <pre className="enforcement-json">{JSON.stringify(applyResult, null, 2)}</pre>
+        )}
+
+        <label className="filter-control enforcement-policy-select">
+          <span>Inspect a saved snapshot</span>
+          <select
+            value={snapshotId}
+            onChange={(event) => setSnapshotId(event.target.value)}
+          >
+            <option value="">Choose a snapshot</option>
+            {snapshots.status === "ready" &&
+              snapshots.data.map((item) => (
+                <option value={item.id} key={item.id}>
+                  Snapshot #{item.id} · {item.backend || "Backend unknown"}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="filter-control">
+          <input
+            type="checkbox"
+            checked={rollbackConfirm}
+            onChange={(event) => setRollbackConfirm(event.target.checked)}
+          />
+          I confirm that this snapshot should be restored.
+        </label>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={!snapshotId || !rollbackConfirm || rollingBack}
+          onClick={() => void handleRollback()}
+        >
+          {rollingBack ? "Rolling back…" : "Roll back selected snapshot"}
+        </button>
+        {rollbackError && <ErrorMessage error={rollbackError} />}
+        {rollbackResult && (
+          <pre className="enforcement-json">{JSON.stringify(rollbackResult, null, 2)}</pre>
+        )}
+      </section>
+
       <div className="enforcement-limitation">
-        The backend's policy apply path returns failure even when a backend is configured. Snapshot rollback returns “not_implemented” for configured backends, and verification currently reports “not_verified”. Recovery status is a fixed report, not a recovery operation. No enforcement, restoration, or active protection is claimed by this page.
+        Apply and rollback use the existing backend consent and snapshot APIs. Traffic-level
+        protection is still verified through provider query-log evidence, not assumed from API success.
       </div>
     </section>
     </LocalizedTree>

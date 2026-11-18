@@ -15,7 +15,11 @@ RULES = {
     "doubleclick.net": ("Advertising", "known advertising domain suffix", "high"),
     "googlesyndication.com": ("Advertising", "known advertising domain suffix", "high"),
     "adservice.google.com": ("Advertising", "known advertising domain suffix", "high"),
-    "google-analytics.com": ("Tracking/Analytics", "known analytics domain suffix", "high"),
+    "google-analytics.com": (
+        "Tracking/Analytics",
+        "known analytics domain suffix",
+        "high",
+    ),
     "segment.io": ("Tracking/Analytics", "known analytics domain suffix", "high"),
     "mixpanel.com": ("Tracking/Analytics", "known analytics domain suffix", "medium"),
     "hotjar.com": ("Tracking/Analytics", "known analytics domain suffix", "medium"),
@@ -87,6 +91,63 @@ def _normalise_blocked(value):
     return None
 
 
+def associate_device_at_event(db, client, client_name, timestamp):
+    """Associate only when observation history supports an event-time owner."""
+    from db.models import Device, DeviceObservation
+
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+
+    if client:
+        observations = (
+            db.query(DeviceObservation)
+            .filter(
+                DeviceObservation.ip_address == client,
+                DeviceObservation.observed_at <= timestamp,
+            )
+            .order_by(DeviceObservation.observed_at.desc())
+            .all()
+        )
+        if observations:
+            latest_time = observations[0].observed_at
+            latest = [item for item in observations if item.observed_at == latest_time]
+            device_ids = {item.device_id for item in latest}
+            if len(device_ids) == 1:
+                device = db.get(Device, next(iter(device_ids)))
+                return device, "linked"
+            return None, "ambiguous"
+
+        devices = db.query(Device).filter(Device.ip_address == client).all()
+        unambiguous = []
+        for device in devices:
+            first_seen = device.first_seen
+            last_seen = device.last_seen
+            if first_seen and timestamp < first_seen:
+                continue
+            if last_seen and timestamp > last_seen:
+                continue
+            unambiguous.append(device)
+        if len(unambiguous) == 1:
+            return unambiguous[0], "linked"
+        if len(unambiguous) > 1:
+            return None, "ambiguous"
+        return None, "unlinked"
+
+    if client_name:
+        devices = db.query(Device).filter(Device.hostname == client_name).all()
+        matching = [
+            device
+            for device in devices
+            if (not device.first_seen or timestamp >= device.first_seen)
+            and (not device.last_seen or timestamp <= device.last_seen)
+        ]
+        if len(matching) == 1:
+            return matching[0], "linked"
+        if len(matching) > 1:
+            return None, "ambiguous"
+    return None, "unlinked"
+
+
 def ingest_events(db, records, source="manual", _retry=False):
     """Store normalized provider events with idempotent upsert semantics.
 
@@ -126,17 +187,19 @@ def ingest_events(db, records, source="manual", _retry=False):
         client = record.get("client")
         client = client.strip() if isinstance(client, str) and client.strip() else None
         client_name = record.get("client_name")
-        client_name = client_name.strip() if isinstance(client_name, str) and client_name.strip() else None
-        device = None
-        if client:
-            device = db.query(Device).filter(Device.ip_address == client).first()
-        if device is None and client_name:
-            device = db.query(Device).filter(Device.hostname == client_name).first()
+        client_name = (
+            client_name.strip()
+            if isinstance(client_name, str) and client_name.strip()
+            else None
+        )
         timestamp = record.get("timestamp")
         if not isinstance(timestamp, datetime):
             timestamp = datetime.utcnow()
         if timestamp.tzinfo is not None:
             timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+        device, association_status = associate_device_at_event(
+            db, client, client_name, timestamp
+        )
         detail = classify_domain_detailed(domain)
         rules = record.get("rules")
         staged.append(
@@ -155,6 +218,7 @@ def ingest_events(db, records, source="manual", _retry=False):
                 rules_json=rules if isinstance(rules, list) else None,
                 upstream=record.get("upstream"),
                 confidence=detail["confidence"],
+                association_status=association_status,
             )
         )
     try:
@@ -167,7 +231,12 @@ def ingest_events(db, records, source="manual", _retry=False):
     except Exception:
         db.rollback()
         if _retry:
-            return {"inserted": 0, "duplicates": 0, "skipped": len(records), "first": None}
+            return {
+                "inserted": 0,
+                "duplicates": 0,
+                "skipped": len(records),
+                "first": None,
+            }
         # Fall back to one-at-a-time inserts so a single bad row cannot lose the
         # rest of a provider sync.
         for record in records:
@@ -207,7 +276,7 @@ def ingest_event(db, payload):
     return result["first"]
 
 
-def summary(db, device_id=None, since=None):
+def summary(db, device_id=None, subnet=None, since=None):
     """Privacy metrics over stored events.
 
     Missing blocked information is reported separately from an explicit
@@ -218,6 +287,19 @@ def summary(db, device_id=None, since=None):
     query = db.query(DNSEvent)
     if device_id:
         query = query.filter(DNSEvent.device_id == device_id)
+    if subnet:
+        from db.models import Device
+
+        device_ids = [
+            row[0]
+            for row in db.query(Device.id)
+            .filter(Device.network_subnet == subnet.strip())
+            .all()
+        ]
+        if device_ids:
+            query = query.filter(DNSEvent.device_id.in_(device_ids))
+        else:
+            query = query.filter(False)
     if isinstance(since, datetime):
         if since.tzinfo is not None:
             since = since.astimezone(timezone.utc).replace(tzinfo=None)
@@ -263,11 +345,10 @@ def summary(db, device_id=None, since=None):
             for name, count in blocked_domains.most_common(10)
         ],
         "by_client": [
-            {"client": name, "count": count} for name, count in by_client.most_common(10)
+            {"client": name, "count": count}
+            for name, count in by_client.most_common(10)
         ],
         "by_source": dict(by_source),
-        "timeline": [
-            {"hour": hour, "count": hourly[hour]} for hour in sorted(hourly)
-        ],
+        "timeline": [{"hour": hour, "count": hourly[hour]} for hour in sorted(hourly)],
         "category_evidence": evidence,
     }

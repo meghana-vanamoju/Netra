@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
+    getAdGuardStatus,
     getDevices,
     getDiscoveryResults,
     getLocalNetworkInfo,
@@ -11,7 +12,9 @@ import {
 } from "../api";
 import { ErrorMessage, Icon } from "./ui";
 import { LocalizedTree } from "../localization";
+import { useNetworkContext } from "../NetworkContext";
 import type {
+    AdGuardStatus,
     ApiError,
     Device,
     DiscoveryResponse,
@@ -73,6 +76,7 @@ function validateSubnet(value: string) {
 }
 
 export function DiscoveryPage() {
+    const { setSelectedSubnet } = useNetworkContext();
     const [network, setNetwork] = useState<ResourceState<LocalNetworkInfo>>({
         status: "loading",
     });
@@ -87,6 +91,8 @@ export function DiscoveryPage() {
         useState<RouterCapabilities | null>(null);
     const [routerDevices, setRouterDevices] =
         useState<RouterDevicesResponse | null>(null);
+    const [adguardStatus, setAdguardStatus] =
+        useState<AdGuardStatus | null>(null);
     const [routerError, setRouterError] = useState<ApiError | null>(null);
     const [discoveryError, setDiscoveryError] = useState<ApiError | null>(null);
     const [scanResponse, setScanResponse] =
@@ -127,8 +133,8 @@ export function DiscoveryPage() {
 
     const refreshInventory = async () => {
         const [resultResponse, deviceResponse] = await Promise.allSettled([
-            getDiscoveryResults(),
-            getDevices(),
+            getDiscoveryResults(subnet),
+            getDevices({ live: true, subnet }),
         ]);
         setResults(
             resultResponse.status === "fulfilled"
@@ -156,18 +162,21 @@ export function DiscoveryPage() {
         setRouterTest(null);
         setCapabilities(null);
         setRouterDevices(null);
+        setAdguardStatus(null);
         if (!isPrivateIPv4(ip)) {
             setRouterError(new Error("Enter a private IPv4 address such as 192.168.88.1."));
             return;
         }
         setRouterBusy(true);
         try {
-            const [test, report] = await Promise.all([
+            const [test, report, adguard] = await Promise.all([
                 testRouter(ip),
                 getRouterCapabilities(ip),
+                getAdGuardStatus(ip),
             ]);
             setRouterTest(test);
             setCapabilities(report);
+            setAdguardStatus(adguard);
             if (report.adguard_home_configured) {
                 const response = await getRouterDevices(ip);
                 setRouterDevices(response);
@@ -219,6 +228,7 @@ export function DiscoveryPage() {
         try {
             const response = await runDiscovery(requestedSubnet);
             setScanResponse(response);
+            setSelectedSubnet(requestedSubnet);
             setLastDiscovery(new Date().toISOString());
             await refreshInventory();
         } catch (error) {
@@ -248,34 +258,7 @@ export function DiscoveryPage() {
     };
 
     const shownDevices: DiscoveryResult[] =
-        results.status === "ready"
-            ? [
-                ...results.data,
-                ...(inventory.status === "ready"
-                    ? inventory.data
-                        .filter((stored) =>
-                            !results.data.some(
-                                (observed) =>
-                                    (stored.mac_address &&
-                                        stored.mac_address.toUpperCase() ===
-                                        observed.mac_address?.toUpperCase()) ||
-                                    stored.ip_address === observed.ip_address,
-                            ),
-                        )
-                        .map((stored) => ({
-                            ip_address: stored.ip_address,
-                            mac_address: stored.mac_address,
-                            hostname: stored.hostname,
-                            discovery_source: stored.discovery_source ?? "previously-seen",
-                            sources: Array.isArray(stored.metadata?.sources)
-                                ? stored.metadata.sources.filter(
-                                    (source): source is string => typeof source === "string",
-                                )
-                                : [],
-                        }))
-                    : []),
-            ]
-            : [];
+        results.status === "ready" ? results.data : [];
 
     const formatTimestamp = (value: string | undefined) => {
         if (!value) return "Unknown";
@@ -387,6 +370,20 @@ export function DiscoveryPage() {
                             {routerBusy ? "Retrieving…" : "Retrieve connected devices"}
                         </button>
                     )}
+                    {adguardStatus && (
+                        <div className="router-device-status" role="status">
+                            <strong>AdGuard filtering:</strong>{" "}
+                            {adguardStatus.filtering_enabled === null
+                                ? "Not configured"
+                                : adguardStatus.filtering_enabled
+                                    ? "Enabled on the provider"
+                                    : "Disabled on the provider"}
+                            <span> · DHCP/DNS network-wide enforcement: Not verified</span>
+                            {adguardStatus.guidance.slice(0, 2).map((line) => (
+                                <div key={line}>{line}</div>
+                            ))}
+                        </div>
+                    )}
                     {routerDevices && (
                         <div className={`router-device-status status-${routerDevices.status}`} role="status">
                             {routerDevices.status === "available"
@@ -473,7 +470,17 @@ export function DiscoveryPage() {
                             {scanResponse.timeout_count !== undefined && (
                                 <span>{scanResponse.timeout_count} <span>timed out</span></span>
                             )}
-                            {scanResponse.partial_results && <strong>Partial results</strong>}
+                            {(scanResponse.scan_status === "partial" || scanResponse.partial_results) && (
+                                <strong>Partial results</strong>
+                            )}
+                            {scanResponse.coverage && (
+                                <span>
+                                    {scanResponse.coverage.hosts_probed} of {scanResponse.coverage.hosts_in_subnet} addresses probed
+                                    {scanResponse.coverage.unprobed_hosts > 0
+                                        ? ` · ${scanResponse.coverage.unprobed_hosts} not probed`
+                                        : ""}
+                                </span>
+                            )}
                         </div>
                     )}
                     {results.status === "loading" ? (

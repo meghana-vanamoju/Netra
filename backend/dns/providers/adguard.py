@@ -412,27 +412,59 @@ class AdGuardHomeAdapter:
 
     # ---- controlled, explicitly-enabled enforcement helpers ---------------
 
-    def add_user_rule(self, domain: str) -> dict:
+    @staticmethod
+    def user_rule(domain: str, action: str = "block") -> str:
         domain = normalize_domain(domain)
         if not domain:
             raise ValueError("Invalid domain for a filtering rule")
+        if action == "allow":
+            return f"@@||{domain}^"
+        if action in ("block", "unblock", "remove"):
+            return f"||{domain}^"
+        raise ValueError("Unsupported filtering rule action")
+
+    def add_user_rule(self, domain: str, action: str = "block") -> dict:
+        rule = self.user_rule(domain, "allow" if action == "allow" else "block")
         current = self.filtering_status()
         rules = current["user_rules"]
-        rule = f"||{domain}^"
         if rule not in rules:
             rules = rules + [rule]
             self._post_json("/control/filtering/set_rules", {"rules": rules})
-        return {"provider": "adguard-home", "domain": domain, "rule": rule, "status": "applied"}
+        return {
+            "provider": "adguard-home",
+            "domain": normalize_domain(domain),
+            "rule": rule,
+            "action": "allow" if action == "allow" else "block",
+            "status": "applied",
+        }
 
-    def remove_user_rule(self, domain: str) -> dict:
-        domain = normalize_domain(domain)
-        if not domain:
+    def remove_user_rule(self, domain: str, action: str | None = None) -> dict:
+        normalized = normalize_domain(domain)
+        if not normalized:
             raise ValueError("Invalid domain for a filtering rule")
+        if action == "allow":
+            removable = {self.user_rule(normalized, "allow")}
+        elif action in (None, "unblock", "remove"):
+            removable = {
+                self.user_rule(normalized, "block"),
+                self.user_rule(normalized, "allow"),
+            }
+        else:
+            raise ValueError("Unsupported filtering rule action")
         current = self.filtering_status()
-        rule = f"||{domain}^"
-        rules = [r for r in current["user_rules"] if r != rule]
+        rules = [r for r in current["user_rules"] if r not in removable]
         self._post_json("/control/filtering/set_rules", {"rules": rules})
-        return {"provider": "adguard-home", "domain": domain, "rule": rule, "status": "removed"}
+        return {
+            "provider": "adguard-home",
+            "domain": normalized,
+            "rules": sorted(removable),
+            "status": "removed",
+        }
+
+    def refresh_filters(self) -> dict:
+        """Ask AdGuard to refresh configured filter lists; no router change."""
+        self._post_json("/control/filtering/refresh", {})
+        return {"provider": "adguard-home", "status": "refreshed"}
 
     def restore_user_rules(self, rules) -> dict:
         """Restore an exact, previously snapshotted user-rule list."""

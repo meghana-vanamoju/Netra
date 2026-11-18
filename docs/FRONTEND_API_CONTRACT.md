@@ -57,7 +57,7 @@ verification, and recovery APIs.
 
 | Method and path | Response and behavior |
 |---|---|
-| `GET /api/devices?limit=200&offset=0` | Array of device records; the UI searches and paginates the returned first 200 locally. |
+| `GET /api/devices?limit=200&offset=0&live=true&subnet=` | Live snapshot records when `live=true`; historical records remain available without `live`. Stable MAC identity is preferred, IP is a fallback. |
 | `GET /api/classifications` | Array of `{ "device_id": number, "category": string, "confidence": number, "reasons": string[], "vendor_identified": boolean }`. |
 | `POST /api/devices/{device_id}/classify` | Recalculates and returns one device's classification; it does not persist the result. The UI only calls this after the user requests recalculation in device details. |
 | `POST /api/discovery/run?subnet={cidr}` | `{ "discovered": number, "subnet": string, "duration_seconds": number, "probes_attempted": number, "hosts_responding": number, "timeout_count": number, "probe_errors": number, "partial_results": boolean }`. Requires a private IPv4 subnet within the active network or `NETRA_AUTHORIZED_CIDRS`, capped at `/16`; scan records are persisted to inventory. |
@@ -169,7 +169,8 @@ was blocked or that protection is active.
 
 ## Enforcement and recovery UI
 
-The Enforcement & Recovery page uses only read endpoints:
+The Enforcement readiness page uses read endpoints for evidence and an explicit
+consent-gated apply/verify/rollback workflow for saved policies:
 
 | Method and path | Response |
 |---|---|
@@ -183,14 +184,31 @@ The Enforcement & Recovery page uses only read endpoints:
 | `GET /api/policies/{policy_id}/rollback-status` | `{ "policy_id": number, "status": string, "rollback_ready": boolean }`. This is a status flag only. |
 | `GET /api/verification/policy/{policy_id}` | `{ "policy_id", "status": "verified" \| "not_verified", "provider", "evidence", "reason" }`; `verified` requires real provider query-log evidence. |
 
-The read-only page does not call approval, apply, or rollback. Those endpoints
-now exist for a separate consent-controlled workflow:
+Consent-gated actions are available only after a policy is selected and the
+confirmation checkbox is checked:
 `POST /api/policies/{id}/approve?plan_id=&confirm=true`,
 `POST /api/policies/{id}/apply`, and
 `POST /api/snapshots/{id}/rollback?confirm=true`. They are only usable with a
-configured provider and explicit opt-in. Configure the UI to show loading,
-error, empty, and success states; never label a configured backend as active
-protection.
+configured provider and explicit opt-in. Verification status is read back after
+apply and is never inferred from the apply response. Show loading, error, empty,
+and success states; never label a configured backend as active protection.
+
+## Completed page contracts
+
+| Method and path | Frontend use |
+|---|---|
+| `GET /api/dashboard/summary?subnet=` | Live overview cards. Every value is backend-reported; unconfigured/unavailable states are explicit. |
+| `GET /api/discovery/status` | Bounded scan coverage and last-scan timestamp. |
+| `GET /api/bandwidth/interfaces`, `GET /api/bandwidth/status`, `POST /api/bandwidth/sample`, `GET /api/bandwidth/history` | Host-local sampler. The UI labels all rates as `netra-host-interface`, never router-wide. |
+| `GET /api/enforcement/readiness` | Gateway, interface, permissions, supported/unsupported modes, warnings and snapshot count. |
+| `GET /api/diagnostics/adguard` | Provider status, filtering, statistics, query-log evidence and independent router DHCP/DNS verification status. |
+| `GET /api/dns/events?domain=` | DNS event search/filter. |
+| `POST /api/dns/providers/filtering/refresh?confirm=true` | Explicit provider reload where supported. |
+| `POST /api/dns/providers/filtering/rules` | `block`, `unblock`, `allow`, `remove` actions with `confirm: true`. |
+| `POST /api/policies`, `PUT /api/policies/{id}`, `DELETE /api/policies/{id}?confirm=true` | Saved device policy CRUD with target, enabled state and supported DNS rules. |
+| `POST /api/policies/preview?audit_id={id}` | Non-persistent policy drafts. |
+| `POST /api/snapshots/from-provider` | Captures real provider user rules, explicitly not a database backup. |
+| `GET /api/privacy/score`, `POST /api/policies/preview?audit_id={id}` | Evidence-backed score and dry-run policy drafts. |
 
 ## Errors and pagination
 

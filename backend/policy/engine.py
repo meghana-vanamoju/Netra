@@ -14,16 +14,44 @@ def _is_essential(domain):
 
 def generate_policies(db, audit_findings):
     policies = []
+    active_statuses = {
+        "proposed",
+        "dry-run completed",
+        "awaiting approval",
+        "approved",
+        "applying",
+        "applied",
+    }
     for finding in audit_findings:
         title = finding.get("title", "").lower()
         if "tracking" in title or "telemetry" in title or "advertising" in title:
+            target = finding.get("device_id")
+            existing = (
+                db.query(Policy)
+                .filter(
+                    Policy.name == "Block tracking domains",
+                    Policy.action == "block_domain_category",
+                    Policy.target == (str(target) if target is not None else None),
+                    Policy.status.in_(active_statuses),
+                )
+                .first()
+            )
+            if existing is not None:
+                policies.append(existing)
+                continue
+            evidence = "; ".join(str(item) for item in (finding.get("evidence") or []))
             policy = Policy(
                 name="Block tracking domains",
                 description=(
                     "Dry-run policy for observed tracking/telemetry/advertising "
-                    f"queries. Reason: {finding.get('title')} ({finding.get('detection_rule')})."
+                    f"queries. Reason: {finding.get('title')} "
+                    f"({finding.get('detection_rule')}). "
+                    f"Evidence: {evidence or 'none provided'}. "
+                    "Expected effect: reduce tracking/telemetry/advertising DNS queries. "
+                    "Potential impact: affected domains stop resolving for selected clients. "
+                    "Reversible through snapshot rollback."
                 ),
-                target=finding.get("device_id"),
+                target=target,
                 action="block_domain_category",
                 risk="Medium",
                 reversible=1,
@@ -47,7 +75,12 @@ def dry_run(db, policy_ids):
     for policy in policies:
         query = db.query(DNSEvent).filter(DNSEvent.category.in_(POLICY_CATEGORIES))
         if policy.target is not None:
-            query = query.filter(DNSEvent.device_id == policy.target)
+            try:
+                target_id = int(policy.target)
+            except (TypeError, ValueError):
+                target_id = None
+            if target_id is not None:
+                query = query.filter(DNSEvent.device_id == target_id)
         events = query.all()
         domains = sorted(
             {

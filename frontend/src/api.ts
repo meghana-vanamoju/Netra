@@ -1,9 +1,15 @@
 import type {
+  AdGuardDiagnostics,
+  AdGuardStatus,
   AuditDetail,
   AuditFinding,
   AuditReport,
   AuditRunResponse,
   BackendCapabilities,
+  BandwidthInterface,
+  BandwidthSample,
+  BandwidthStatus,
+  DashboardSummary,
   DeviceClassification,
   Device,
   DiscoveryResponse,
@@ -16,16 +22,20 @@ import type {
   DnsSyncResult,
   DryRunImpact,
   DryRunResult,
+  EnforcementReadiness,
   EnforcementStatus,
   HealthResponse,
   LocalNetworkInfo,
+  PolicyConfigInput,
   PolicyDetail,
+  PolicyDraft,
   PolicyApprovalStatus,
   PolicyExecutionStatus,
   PolicyPlanResponse,
   PolicyRollbackStatus,
   PolicySummary,
   PolicyVerificationStatus,
+  PrivacyScore,
   RecoveryStatus,
   SavedDryRunPlan,
   SnapshotDetail,
@@ -112,8 +122,11 @@ export function getDatabaseHealth() {
   return requestJson<{ status: string }>("/api/db/health");
 }
 
-export function getDevices() {
-  return requestJson<Device[]>("/api/devices?limit=200");
+export function getDevices(options: { live?: boolean; subnet?: string } = {}) {
+  const query = new URLSearchParams({ limit: "200" });
+  if (options.live) query.set("live", "true");
+  if (options.subnet) query.set("subnet", options.subnet);
+  return requestJson<Device[]>(`/api/devices?${query.toString()}`);
 }
 
 export function getClassifications() {
@@ -168,14 +181,18 @@ export function getRouterDevices(ip: string) {
   );
 }
 
-export function getDiscoveryResults() {
-  return requestJson<DiscoveryResult[]>("/api/discovery/results");
+export function getDiscoveryResults(subnet?: string) {
+  const suffix = subnet ? `?${new URLSearchParams({ subnet }).toString()}` : "";
+  return requestJson<DiscoveryResult[]>(`/api/discovery/results${suffix}`);
 }
 
-export function getDnsSummary(deviceId?: number) {
+export function getDnsSummary(deviceId?: number, subnet?: string) {
   const query = new URLSearchParams();
   if (deviceId !== undefined) {
     query.set("device_id", String(deviceId));
+  }
+  if (subnet) {
+    query.set("subnet", subnet);
   }
   const search = query.toString();
   const suffix = search ? `?${search}` : "";
@@ -200,23 +217,37 @@ export function syncDnsEvents() {
   return requestJson<DnsSyncResult>("/api/dns/events/sync", { method: "POST" });
 }
 
-export function getDnsDomains(limit = 20) {
+export function getDnsDomains(limit = 20, deviceId?: number, subnet?: string) {
   const query = new URLSearchParams({ limit: String(limit) });
+  if (deviceId !== undefined) query.set("device_id", String(deviceId));
+  if (subnet) query.set("subnet", subnet);
   return requestJson<DnsDomainCount[]>(`/api/dns/analytics/domains?${query}`);
 }
 
-export function getDnsDeviceCounts() {
-  return requestJson<DnsDeviceCount[]>("/api/dns/analytics/devices");
+export function getDnsDeviceCounts(subnet?: string) {
+  const query = new URLSearchParams();
+  if (subnet) query.set("subnet", subnet);
+  const search = query.toString();
+  const suffix = search ? `?${search}` : "";
+  return requestJson<DnsDeviceCount[]>(`/api/dns/analytics/devices${suffix}`);
 }
 
 export function getDnsEvents({
   limit = 50,
   offset = 0,
   deviceId,
+  linked,
+  clientIp,
+  subnet,
+  domain,
 }: {
   limit?: number;
   offset?: number;
   deviceId?: number;
+  linked?: boolean;
+  clientIp?: string;
+  subnet?: string;
+  domain?: string;
 } = {}) {
   const query = new URLSearchParams({
     limit: String(limit),
@@ -225,11 +256,36 @@ export function getDnsEvents({
   if (deviceId !== undefined) {
     query.set("device_id", String(deviceId));
   }
+  if (linked !== undefined) query.set("linked", String(linked));
+  if (clientIp) query.set("client_ip", clientIp);
+  if (subnet) query.set("subnet", subnet);
+  if (domain) query.set("domain", domain);
   return requestJson<DnsEvent[]>(`/api/dns/events?${query}`);
 }
 
-export function getAuditReports() {
-  return requestJson<AuditReport[]>("/api/audits");
+export function setDnsFilteringRule(
+  domain: string,
+  action: "block" | "unblock" | "allow" | "remove",
+  confirm: boolean,
+) {
+  return requestJson<Record<string, unknown>>("/api/dns/providers/filtering/rules", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ domain, action, confirm }),
+  });
+}
+
+export function getAdGuardStatus(ip: string) {
+  const query = new URLSearchParams({ ip });
+  return requestJson<AdGuardStatus>(`/api/router/adguard/status?${query}`);
+}
+
+export function getAuditReports(subnet?: string) {
+  const query = new URLSearchParams();
+  if (subnet) query.set("subnet", subnet);
+  const search = query.toString();
+  const suffix = search ? `?${search}` : "";
+  return requestJson<AuditReport[]>(`/api/audits${suffix}`);
 }
 
 export function getAudit(auditId: number) {
@@ -240,10 +296,13 @@ export function getAuditFindings(auditId: number) {
   return requestJson<AuditFinding[]>(`/api/audits/${auditId}/findings`);
 }
 
-export function runAudit(scope: "network" | "device", deviceId?: number) {
+export function runAudit(scope: "network" | "device", deviceId?: number, subnet?: string) {
   const query = new URLSearchParams({ scope });
   if (scope === "device" && deviceId !== undefined) {
     query.set("device_id", String(deviceId));
+  }
+  if (scope === "network" && subnet) {
+    query.set("subnet", subnet);
   }
   return requestJson<AuditRunResponse>(
     `/api/audits/run?${query}`,
@@ -320,5 +379,130 @@ export function getPolicyRollbackStatus(policyId: number) {
 export function getPolicyVerificationStatus(policyId: number) {
   return requestJson<PolicyVerificationStatus>(
     `/api/verification/policy/${policyId}`,
+  );
+}
+
+export function approvePolicy(policyId: number, planId: number, confirm = true) {
+  return requestJson<Record<string, unknown>>(
+    `/api/policies/${policyId}/approve?plan_id=${planId}&confirm=${confirm}`,
+    { method: "POST" },
+  );
+}
+
+export function applyPolicy(policyId: number) {
+  return requestJson<Record<string, unknown>>(`/api/policies/${policyId}/apply`, {
+    method: "POST",
+  });
+}
+
+export function rollbackSnapshot(snapshotId: number, confirm = true) {
+  return requestJson<Record<string, unknown>>(
+    `/api/snapshots/${snapshotId}/rollback?confirm=${confirm}`,
+    { method: "POST" },
+  );
+}
+
+export function getDashboardSummary(subnet?: string) {
+  const suffix = subnet ? `?${new URLSearchParams({ subnet }).toString()}` : "";
+  return requestJson<DashboardSummary>(`/api/dashboard/summary${suffix}`);
+}
+
+export function getBandwidthInterfaces() {
+  return requestJson<BandwidthInterface[]>("/api/bandwidth/interfaces");
+}
+
+export function getBandwidthStatus(iface?: string) {
+  const suffix = iface ? `?${new URLSearchParams({ interface: iface }).toString()}` : "";
+  return requestJson<BandwidthStatus>(`/api/bandwidth/status${suffix}`);
+}
+
+export function sampleBandwidth(iface?: string, intervalMs?: number) {
+  const query = new URLSearchParams();
+  if (iface) query.set("interface", iface);
+  if (intervalMs !== undefined) query.set("interval_ms", String(intervalMs));
+  const search = query.toString();
+  const suffix = search ? `?${search}` : "";
+  return requestJson<BandwidthSample>(`/api/bandwidth/sample${suffix}`, { method: "POST" }, 10_000);
+}
+
+export function getBandwidthHistory(iface?: string, limit = 60) {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (iface) query.set("interface", iface);
+  return requestJson<{ interface: string; retention_samples: number; returned: number; samples: BandwidthSample[] }>(
+    `/api/bandwidth/history?${query.toString()}`,
+  );
+}
+
+export function getAdGuardDiagnostics(subnet?: string, deviceId?: number) {
+  const query = new URLSearchParams();
+  if (subnet) query.set("subnet", subnet);
+  if (deviceId !== undefined) query.set("device_id", String(deviceId));
+  const search = query.toString();
+  const suffix = search ? `?${search}` : "";
+  return requestJson<AdGuardDiagnostics>(`/api/diagnostics/adguard${suffix}`);
+}
+
+export function getEnforcementReadiness() {
+  return requestJson<EnforcementReadiness>("/api/enforcement/readiness");
+}
+
+export function getPrivacyScore(subnet?: string, deviceId?: number) {
+  const query = new URLSearchParams();
+  if (subnet) query.set("subnet", subnet);
+  if (deviceId !== undefined) query.set("device_id", String(deviceId));
+  const search = query.toString();
+  const suffix = search ? `?${search}` : "";
+  return requestJson<PrivacyScore>(`/api/privacy/score${suffix}`);
+}
+
+export function createPolicy(payload: PolicyConfigInput) {
+  return requestJson<PolicyDetail>("/api/policies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePolicy(policyId: number, payload: PolicyConfigInput) {
+  return requestJson<PolicyDetail>(`/api/policies/${policyId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deletePolicy(policyId: number) {
+  return requestJson<{ status: string; policy_id: number }>(
+    `/api/policies/${policyId}?confirm=true`,
+    { method: "DELETE" },
+  );
+}
+
+export function previewPolicies(auditId: number) {
+  return requestJson<{ audit_id: number; drafts: PolicyDraft[]; saved: boolean }>(
+    `/api/policies/preview?audit_id=${auditId}`,
+    { method: "POST" },
+  );
+}
+
+export function refreshDnsFilters() {
+  return requestJson<Record<string, unknown>>("/api/dns/providers/filtering/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: true }),
+  });
+}
+
+export function createProviderSnapshot() {
+  return requestJson<{ id: number; checksum: string; backend: string; rules: number; type: string }>(
+    "/api/snapshots/from-provider",
+    { method: "POST" },
+  );
+}
+
+export function deleteSnapshot(snapshotId: number) {
+  return requestJson<{ status: string; snapshot_id: number }>(
+    `/api/snapshots/${snapshotId}?confirm=true`,
+    { method: "DELETE" },
   );
 }

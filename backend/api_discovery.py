@@ -1,5 +1,6 @@
 import logging
 import subprocess
+from datetime import datetime, timezone
 from time import monotonic
 from urllib.parse import unquote
 
@@ -13,10 +14,12 @@ from discovery.service import (
     get_local_network_info,
     validate_subnet,
 )
-from discovery.unified import merge_devices, upsert_inventory
+from discovery.unified import merge_devices, replace_discovery_snapshot
 
 router = APIRouter(prefix="/api/discovery", tags=["discovery"])
 _results = []
+_results_by_subnet = {}
+_last_scan_by_subnet = {}
 _router_results = []
 logger = logging.getLogger(__name__)
 
@@ -115,7 +118,14 @@ def run_discovery(subnet: str = "192.168.1.0/24", db: Session = Depends(get_db))
         )
 
     try:
-        upsert_inventory(db, discovered)
+        replace_discovery_snapshot(
+            db,
+            subnet,
+            discovered,
+            scan_partial=metrics.get("partial_results", False),
+            probed_addresses=metrics.get("probed_addresses"),
+            coverage_complete=metrics.get("coverage_complete"),
+        )
     except SQLAlchemyError:
         db.rollback()
         duration = monotonic() - started
@@ -137,9 +147,29 @@ def run_discovery(subnet: str = "192.168.1.0/24", db: Session = Depends(get_db))
         )
 
     _results = discovered
+    _results_by_subnet[subnet] = discovered
     duration = round(monotonic() - started, 3)
-    response = {"discovered": len(discovered), "subnet": subnet}
+    response = {
+        "discovered": len(discovered),
+        "subnet": subnet,
+        "scan_status": "partial"
+        if metrics.get("partial_results", False)
+        or not metrics.get("coverage_complete", True)
+        else "complete",
+        "coverage": {
+            "hosts_in_subnet": metrics.get("hosts_in_subnet", 0),
+            "hosts_probed": metrics.get("hosts_probed", 0),
+            "coverage_complete": metrics.get("coverage_complete", True),
+            "unprobed_hosts": max(
+                0,
+                metrics.get("hosts_in_subnet", 0)
+                - metrics.get("hosts_probed", 0),
+            ),
+        },
+    }
     response.update(_scan_metrics(metrics, duration))
+    response["last_scan_at"] = datetime.now(timezone.utc).isoformat()
+    _last_scan_by_subnet[subnet] = response
     logger.info(
         "LAN discovery completed subnet=%s duration_seconds=%.3f discovered=%d probes_attempted=%d hosts_responding=%d timeout_count=%d partial_results=%s",
         subnet,
@@ -153,6 +183,29 @@ def run_discovery(subnet: str = "192.168.1.0/24", db: Session = Depends(get_db))
     return response
 
 
+@router.get("/status")
+def discovery_status(subnet: str | None = None):
+    """Return the last completed LAN scan for a subnet, with coverage facts."""
+    if subnet:
+        canonical = canonicalize_subnet(subnet)
+        result = _last_scan_by_subnet.get(canonical)
+        if result is None:
+            return {"scanned": False, "subnet": canonical}
+        return {"scanned": True, **result}
+    if not _last_scan_by_subnet:
+        return {"scanned": False, "subnet": None}
+    latest = max(
+        _last_scan_by_subnet.values(),
+        key=lambda item: item.get("last_scan_at") or "",
+    )
+    return {"scanned": True, **latest}
+
+
 @router.get("/results")
-def results():
-    return merge_devices(_results, _router_results)
+def results(subnet: str | None = None):
+    """Return LAN observations only; router inventory has a separate endpoint."""
+    if subnet:
+        current = _results_by_subnet.get(subnet, [])
+    else:
+        current = _results
+    return merge_devices(current, [])

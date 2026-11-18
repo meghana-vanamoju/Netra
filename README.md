@@ -29,20 +29,20 @@ Netra aims to:
 - DNS analytics, privacy audits, policy planning, enforcement lifecycle, snapshots, recovery, and backend capability APIs.
 - Real AdGuard Home query-log/statistics integration with authenticated API access, bounded idempotent sync, provider health states, and Pi-hole compatibility.
 - Evidence-based domain categorization (advertising, tracking/analytics, telemetry, social, CDN, essential, unknown) with category confidence and source labels.
-- React + TypeScript + Vite frontend with a responsive live dashboard for device inventory, DNS activity, saved audit findings, and backend health.
+- React + TypeScript + Vite frontend with a responsive live dashboard and dedicated pages for DNS protection, privacy audit, device policies, enforcement readiness, host-local bandwidth, configuration snapshots, and AdGuard diagnostics.
 - Frontend/backend separation with dedicated backend domain modules.
 
-### Planned
+### Not implemented / explicitly out of scope
 
-- Full device discovery and inventory management screens.
-- Detailed DNS event and domain views.
-- Audit execution and findings management screens.
-- Policy review, consent, and enforcement controls.
-- UI controls for provider status, DNS sync, blocked/allowed analytics, consent, and rollback (API and TypeScript client are ready; UI handoff is documented).
-- Snapshot and recovery management screens.
-- Before/after benchmarking.
-- Multilingual dashboard (English, Telugu, Hindi, Tamil, Kannada).
-- Exportable reports.
+- Automatic router DHCP/DNS changes or privilege escalation. Netra does not
+  modify router settings.
+- Router-wide or client-level protection claims without independent router
+  DHCP/DNS evidence and client query-log evidence.
+- Full database backups. Only provider configuration snapshots are available.
+- Internet-access scheduling and device internet-disable controls; the backend
+  does not expose these as supported modes.
+- Router-wide bandwidth accounting. Bandwidth is host-local
+  (`netra-host-interface`) from `/proc/net/dev`.
 
 The dashboard foundation presents existing backend data and connection status. It does not run audits automatically or claim that DNS protection is active.
 
@@ -196,7 +196,7 @@ npm test
 npm run build
 ```
 
-### LAN Discovery
+### LAN Discovery and live inventory
 
 LAN Discovery is manual and read-only. The backend accepts only authorized
 private IPv4 subnets, probes at most 64 hosts with at most eight concurrent

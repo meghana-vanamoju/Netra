@@ -17,6 +17,22 @@ graph TD
   Consent --> Snapshots[Config snapshots + rollback]
 ```
 
+## Live inventory and DNS identity
+
+A successful LAN scan replaces the current process snapshot for its selected
+subnet and marks observed persistent rows current. Unobserved rows in the same
+subnet remain in SQLite as historical records and are not marked offline by
+timeouts or partial scans. The `devices` table is upgraded additively with
+`is_current`, `network_subnet`, `last_scan_at`, and `scan_status`; no historical
+rows are deleted. MAC address is the preferred stable identifier, while IP
+address is used for verified DHCP/DNS association and fallback matching.
+
+AdGuard query-log synchronization persists real provider events. Each event
+stores provider provenance, client IP/name, timestamp, category and blocked
+status. Ingestion links by exact client IP, then hostname when no IP match exists;
+it never invents a domain or device identity. Missing provider configuration,
+provider disconnection, and unlinked events are separate UI states.
+
 ## LAN Discovery flow
 
 `POST /api/discovery/run` validates the requested private subnet against the

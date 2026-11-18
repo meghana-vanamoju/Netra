@@ -41,6 +41,56 @@ def caps(ip: str):
     return result
 
 
+@router.get("/adguard/status")
+def adguard_status(ip: str):
+    if not validate_router_ip(ip):
+        raise HTTPException(400, "Router IP must be a private IPv4 address")
+    adapter = _configured_adguard(ip)
+    if not adapter:
+        return {
+            "configured": False,
+            "provider_state": "not_configured",
+            "router_ip": ip,
+            "filtering_enabled": None,
+            "filter_count": None,
+            "dhcp_inventory": "unsupported",
+            "network_wide_enforcement": "not_verified",
+            "guidance": [
+                "Configure NETRA_ADGUARD_API_URL and credentials on the backend.",
+                "Set the router DHCP DNS servers to the AdGuard Home network address.",
+                "Verify clients send DNS queries by reviewing the provider query log.",
+            ],
+        }
+    try:
+        filtering = adapter.filtering_status()
+        dhcp = adapter.dhcp_status()
+        dhcp_available = isinstance(dhcp, dict)
+    except httpx.TimeoutException:
+        raise HTTPException(503, "AdGuard Home request timed out") from None
+    except httpx.HTTPStatusError:
+        raise HTTPException(
+            503, "AdGuard Home credentials or API access failed"
+        ) from None
+    except (httpx.HTTPError, RuntimeError, ValueError):
+        raise HTTPException(503, "AdGuard Home is unavailable") from None
+    return {
+        "configured": True,
+        "provider_state": "healthy",
+        "router_ip": ip,
+        "filtering_enabled": filtering["enabled"],
+        "filter_count": filtering["filter_count"],
+        "user_rule_count": len(filtering["user_rules"]),
+        "dhcp_inventory": "available" if dhcp_available else "unknown",
+        "network_wide_enforcement": "not_verified",
+        "guidance": [
+            "Filtering is server-side; this does not prove router DHCP uses AdGuard Home.",
+            "Configure the router DHCP DNS server with the AdGuard Home address using the router vendor UI.",
+            "Do not assume VPN, HTTPS DNS, hardcoded DNS or encrypted resolvers are blocked.",
+            "Verify a client query in AdGuard Home before claiming network-wide protection.",
+        ],
+    }
+
+
 @router.post("/devices")
 def router_devices(ip: str, db: Session = Depends(get_db)):
     if not validate_router_ip(ip):

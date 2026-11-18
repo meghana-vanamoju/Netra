@@ -76,8 +76,23 @@ def test_router_inventory_persists_configured_adguard_leases(monkeypatch):
     assert device["mac_address"] == "AA:BB:CC:DD:EE:FF"
     assert device["metadata"]["connection_type"] == "dhcp"
     assert "router:adguard-home" in device["metadata"]["sources"]
-    results = client.get("/api/discovery/results").json()
-    assert any(item["discovery_source"] == "router:adguard-home" for item in results)
+    assert any(
+        item["discovery_source"] == "router:adguard-home"
+        for item in response.json()["devices"]
+    )
+    lan_results = client.get("/api/discovery/results").json()
+    assert all(
+        item.get("discovery_source") != "router:adguard-home" for item in lan_results
+    )
+
+
+def test_adguard_status_unconfigured_is_actionable(monkeypatch):
+    monkeypatch.delenv("NETRA_ADGUARD_API_URL", raising=False)
+    response = client.get("/api/router/adguard/status", params={"ip": "192.168.88.1"})
+    assert response.status_code == 200
+    assert response.json()["configured"] is False
+    assert response.json()["network_wide_enforcement"] == "not_verified"
+    assert any("DHCP" in line for line in response.json()["guidance"])
 
 
 def test_router_inventory_rejects_public_ip():

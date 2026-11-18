@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -30,6 +31,45 @@ def create_snapshot(
     return {"id": snapshot.id, "checksum": checksum}
 
 
+@router.post("/from-provider")
+def snapshot_from_provider(db: Session = Depends(get_db)):
+    """Capture the provider's current user rules without changing anything."""
+    adapter = DNSBackendAdapter()
+    if not adapter.available():
+        raise HTTPException(503, "No DNS provider is configured")
+    try:
+        filtering = adapter.provider.filtering_status()
+    except Exception:
+        raise HTTPException(503, "Provider filtering state could not be captured") from None
+    rules = filtering.get("user_rules")
+    if not isinstance(rules, list):
+        raise HTTPException(503, "Provider filtering state is incomplete")
+    state = {
+        "provider": adapter.backend,
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "filtering_enabled": filtering.get("enabled"),
+        "user_rules": rules,
+        "filter_count": filtering.get("filter_count"),
+    }
+    raw = json.dumps(state, sort_keys=True)
+    snapshot = ConfigSnapshot(
+        backend=adapter.backend or "dns-provider",
+        state_json=state,
+        checksum=hashlib.sha256(raw.encode()).hexdigest(),
+        policy_id=None,
+    )
+    db.add(snapshot)
+    db.commit()
+    db.refresh(snapshot)
+    return {
+        "id": snapshot.id,
+        "checksum": snapshot.checksum,
+        "backend": snapshot.backend,
+        "rules": len(rules),
+        "type": "provider_configuration",
+    }
+
+
 @router.get("")
 def list_snapshots(db: Session = Depends(get_db)):
     snapshots = db.query(ConfigSnapshot).all()
@@ -39,6 +79,12 @@ def list_snapshots(db: Session = Depends(get_db)):
             "backend": item.backend,
             "created_at": item.created_at,
             "checksum": item.checksum,
+            "type": (
+                "local_state"
+                if item.backend == "none"
+                else "provider_configuration"
+            ),
+            "size_bytes": len(json.dumps(item.state_json or {}, sort_keys=True).encode()),
         }
         for item in snapshots
     ]
@@ -53,9 +99,13 @@ def get_snapshot(snap_id: int, db: Session = Depends(get_db)):
     integrity_ok = hashlib.sha256(raw.encode()).hexdigest() == snapshot.checksum
     return {
         "id": snapshot.id,
+        "backend": snapshot.backend,
+        "created_at": snapshot.created_at,
         "state": snapshot.state_json,
         "checksum": snapshot.checksum,
         "integrity_ok": integrity_ok,
+        "type": "local_state" if snapshot.backend == "none" else "provider_configuration",
+        "size_bytes": len(json.dumps(snapshot.state_json or {}, sort_keys=True).encode()),
     }
 
 
@@ -88,3 +138,15 @@ def rollback(snap_id: int, confirm: bool = False, db: Session = Depends(get_db))
         )
     db.commit()
     return result
+
+
+@router.delete("/{snap_id}")
+def delete_snapshot(snap_id: int, confirm: bool = False, db: Session = Depends(get_db)):
+    snapshot = db.get(ConfigSnapshot, snap_id)
+    if not snapshot:
+        raise HTTPException(404, "Snapshot not found")
+    if not confirm:
+        raise HTTPException(400, "Explicit confirmation required")
+    db.delete(snapshot)
+    db.commit()
+    return {"status": "deleted", "snapshot_id": snap_id}

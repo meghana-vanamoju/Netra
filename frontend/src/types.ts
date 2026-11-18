@@ -22,6 +22,10 @@ export type Device = {
   discovery_source: string | null;
   first_seen: string;
   last_seen: string;
+  is_current?: boolean;
+  network_subnet?: string | null;
+  last_scan_at?: string | null;
+  scan_status?: string | null;
   metadata: Record<string, unknown> | null;
 };
 
@@ -50,6 +54,13 @@ export type DiscoveryResponse = {
   timeout_count?: number;
   probe_errors?: number;
   partial_results?: boolean;
+  scan_status?: "complete" | "partial";
+  coverage?: {
+    hosts_in_subnet: number;
+    hosts_probed: number;
+    coverage_complete: boolean;
+    unprobed_hosts: number;
+  };
 };
 
 export type LocalNetworkInfo = {
@@ -99,6 +110,18 @@ export type DnsProviderStatus = {
   config?: Record<string, boolean | number | string | null>;
 };
 
+export type AdGuardStatus = {
+  configured: boolean;
+  provider_state: string;
+  router_ip: string;
+  filtering_enabled: boolean | null;
+  filter_count: number | null;
+  user_rule_count?: number;
+  dhcp_inventory: string;
+  network_wide_enforcement: "not_verified" | "verified";
+  guidance: string[];
+};
+
 export type DnsSyncResult = {
   provider: string | null;
   fetched: number;
@@ -133,6 +156,8 @@ export type DnsDomainCount = {
 export type DnsDeviceCount = {
   device_id: number | null;
   count: number;
+  blocked?: number;
+  allowed?: number;
 };
 
 export type DnsEvent = {
@@ -140,6 +165,8 @@ export type DnsEvent = {
   domain: string;
   category: string | null;
   device_id: number | null;
+  device?: { name: string | null; ip: string; mac: string | null } | null;
+  association_status?: "linked" | "ambiguous" | "unlinked";
   timestamp: string;
   query_type?: string | null;
   blocked?: boolean | null;
@@ -156,6 +183,9 @@ export type AuditReport = {
   id: number;
   scope: string;
   created_at: string;
+  device_id?: number | null;
+  network_subnet?: string | null;
+  summary?: Record<string, unknown> | null;
 };
 
 export type AuditDetail = {
@@ -196,12 +226,26 @@ export type PolicySummary = {
   status: string;
 };
 
+export type PolicyConfig = {
+  enabled: boolean;
+  blocked_domains: string[];
+  allowed_domains: string[];
+  internet_access_control: string | null;
+  dns_protection: string | null;
+  schedule: string | null;
+};
+
 export type PolicyDetail = {
   id: number;
   name: string;
+  description: string | null;
+  target?: string | null;
+  target_device_id?: number | null;
   action: string;
   risk: string;
   reversible: boolean;
+  status: string;
+  config: PolicyConfig;
 };
 
 export type PolicyPlanResponse = {
@@ -250,13 +294,19 @@ export type SnapshotSummary = {
   backend: string | null;
   created_at: string;
   checksum: string | null;
+  type?: string;
+  size_bytes?: number;
 };
 
 export type SnapshotDetail = {
   id: number;
+  backend?: string | null;
+  created_at?: string;
   state: Record<string, unknown> | null;
   checksum: string | null;
   integrity_ok: boolean;
+  type?: string;
+  size_bytes?: number;
 };
 
 export type PolicyApprovalStatus = {
@@ -287,4 +337,185 @@ export type BackendCapabilities = {
   configured_backend: string | null;
   available: boolean;
   status: string;
+};
+
+export type DashboardSummary = {
+  selected_subnet: string | null;
+  devices: { count: number; scope: string };
+  discovery: {
+    scanned: boolean;
+    subnet?: string | null;
+    discovered?: number;
+    last_scan_at?: string | null;
+    scan_status?: string;
+    coverage?: {
+      hosts_in_subnet: number;
+      hosts_probed: number;
+      coverage_complete: boolean;
+      unprobed_hosts: number;
+    };
+    partial_results?: boolean;
+  };
+  dns: {
+    total: number;
+    allowed: number;
+    blocked: number;
+    blocking_percentage: number | null;
+    unknown_blocked_status: number;
+    available: boolean;
+  };
+  provider: {
+    configured: boolean;
+    state: string;
+    provider: string | null;
+    message?: string;
+  };
+  privacy: {
+    score: number;
+    explanation: string;
+    tracking_events: number;
+    unknown_events: number;
+    latest_audit_id: number | null;
+    latest_audit_created_at: string | null;
+    latest_audit_scope: string | null;
+  };
+  enforcement: {
+    provider_ready: boolean;
+    network_wide_ready: boolean;
+    state: string;
+    snapshot_count: number;
+  };
+  bandwidth: {
+    available: boolean;
+    interface: string | null;
+    scope: string;
+    rx_bytes_per_second: number | null;
+    tx_bytes_per_second: number | null;
+    rx_bytes_total: number;
+    tx_bytes_total: number;
+    sample_count: number;
+  };
+};
+
+export type BandwidthInterface = {
+  name: string;
+  active: boolean;
+  rx_bytes_total: number;
+  tx_bytes_total: number;
+};
+
+export type BandwidthSample = {
+  interface: string;
+  sampled_at: string;
+  interval_seconds: number;
+  rx_bytes_per_second: number;
+  tx_bytes_per_second: number;
+  rx_bytes_total: number;
+  tx_bytes_total: number;
+  rx_bytes_delta: number;
+  tx_bytes_delta: number;
+};
+
+export type BandwidthStatus = {
+  interface: string;
+  active_interface: string | null;
+  monitoring: boolean;
+  sampling_interval_ms: number;
+  retention_samples: number;
+  sample_count: number;
+  latest: BandwidthSample | null;
+  cumulative: {
+    rx_bytes: number;
+    tx_bytes: number;
+    rx_packets: number;
+    tx_packets: number;
+  };
+  scope: string;
+  message: string;
+};
+
+export type AdGuardDiagnostics = {
+  provider: {
+    configured: boolean;
+    state: string;
+    provider: string | null;
+    version: string | null;
+    authentication: string | null;
+    capabilities: string[];
+    unsupported: string[];
+    message?: string;
+    config?: Record<string, unknown>;
+  };
+  filtering: {
+    available: boolean;
+    state?: string;
+    message?: string;
+    data: { enabled: boolean; user_rules: string[]; filter_count: number | null } | null;
+  };
+  statistics: { available: boolean; state?: string; message?: string; data: Record<string, unknown> | null };
+  enforcement: { backend: string | null; enabled: boolean; available: boolean };
+  query_log: {
+    recorded_events: number;
+    linked_events: number;
+    latest_timestamp: string | null;
+    clients_identifiable: boolean;
+  };
+  router: {
+    interface: string | null;
+    local_ip: string | null;
+    gateway: string | null;
+    dhcp_dns_verified: boolean;
+    dns_redirect_verified: boolean;
+    note: string;
+  };
+  scope: {
+    subnet: string | null;
+    device_id: number | null;
+    laptop_local_monitoring: boolean;
+    router_wide_protection_verified: boolean;
+  };
+};
+
+export type EnforcementReadiness = {
+  provider_ready: boolean;
+  network_wide_ready: boolean;
+  provider_state: string;
+  backend: string | null;
+  enabled: boolean;
+  filtering_available: boolean;
+  snapshot_count: number;
+  local_network: { interface: string | null; ip_address: string | null; gateway: string | null; subnet: string | null };
+  required_permissions: string[];
+  supported_modes: { mode: string; supported: boolean; scope: string }[];
+  unsupported_modes: { mode: string; reason: string }[];
+  warnings: string[];
+};
+
+export type PrivacyScore = {
+  score: number;
+  explanation: string;
+  tracking_events: number;
+  unknown_events: number;
+  observed_events: number;
+  scope: { subnet: string | null; device_id: number | null };
+};
+
+export type PolicyDraft = {
+  name: string;
+  action: string;
+  target_device_id: number | null;
+  risk: string;
+  reason: string;
+  detection_rule: string;
+  evidence: string[];
+  recommended_next_step: string;
+};
+
+export type PolicyConfigInput = {
+  name: string;
+  description: string;
+  target_device_id: number | null;
+  enabled: boolean;
+  blocked_domains: string[];
+  allowed_domains: string[];
 };

@@ -8,18 +8,47 @@ router = APIRouter(prefix="/api/audits", tags=["audit"])
 device_router = APIRouter(prefix="/api/devices", tags=["audit"])
 
 @router.post("/run")
-def run(scope: str = "network", device_id: int = None, db: Session = Depends(get_db)):
-    findings, summary = run_audit(db, device_id=device_id if scope == "device" else None)
-    rep = AuditReport(scope=scope, device_id=device_id, findings_json=findings, summary_json=summary)
+def run(
+    scope: str = "network",
+    device_id: int = None,
+    subnet: str = None,
+    db: Session = Depends(get_db),
+):
+    findings, summary = run_audit(
+        db,
+        device_id=device_id if scope == "device" else None,
+        subnet=subnet if scope == "network" else None,
+    )
+    if subnet:
+        summary = {**summary, "network_subnet": subnet}
+    rep = AuditReport(
+        scope=scope,
+        device_id=device_id,
+        network_subnet=subnet if scope == "network" else None,
+        findings_json=findings,
+        summary_json=summary,
+    )
     db.add(rep)
     db.commit()
     db.refresh(rep)
     return {"audit_id": rep.id, "findings": len(findings), "summary": summary}
 
 @router.get("")
-def list_audits(db: Session = Depends(get_db)):
-    reps = db.query(AuditReport).order_by(AuditReport.created_at.desc()).all()
-    return [{"id": r.id, "scope": r.scope, "created_at": r.created_at} for r in reps]
+def list_audits(subnet: str = None, db: Session = Depends(get_db)):
+    query = db.query(AuditReport).order_by(AuditReport.created_at.desc())
+    if subnet:
+        query = query.filter(AuditReport.network_subnet == subnet.strip())
+    reps = query.all()
+    return [
+        {
+            "id": r.id,
+            "scope": r.scope,
+            "device_id": r.device_id,
+            "network_subnet": r.network_subnet,
+            "created_at": r.created_at,
+        }
+        for r in reps
+    ]
 
 @router.get("/{audit_id}")
 def get_audit(audit_id: int, db: Session = Depends(get_db)):

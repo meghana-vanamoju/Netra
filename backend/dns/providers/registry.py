@@ -74,6 +74,14 @@ def provider_filtering(config: ProviderConfig | None = None) -> dict:
     return provider.filtering_status()
 
 
+def refresh_provider_filters(config: ProviderConfig | None = None) -> dict:
+    cfg = resolve_config(config)
+    provider = get_provider(cfg)
+    if provider is None or not hasattr(provider, "refresh_filters"):
+        raise ProviderNotConfigured("No DNS provider with filter refresh support is configured")
+    return provider.refresh_filters()
+
+
 def fetch_provider_queries(config: ProviderConfig | None = None) -> list:
     cfg = resolve_config(config)
     provider = get_provider(cfg)

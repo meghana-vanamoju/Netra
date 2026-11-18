@@ -11,6 +11,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { DiscoveryPage } from "./DiscoveryPage";
 import { LocalizationProvider } from "../localization";
 import {
+    getAdGuardStatus,
     getDevices,
     getDiscoveryResults,
     getLocalNetworkInfo,
@@ -24,6 +25,7 @@ import type { DiscoveryResponse, DiscoveryResult } from "../types";
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 vi.mock("../api", () => ({
+    getAdGuardStatus: vi.fn(),
     getDevices: vi.fn(),
     getDiscoveryResults: vi.fn(),
     getLocalNetworkInfo: vi.fn(),
@@ -59,6 +61,16 @@ beforeEach(() => {
         subnet: "192.168.88.0/24",
     });
     vi.mocked(getRouterCapabilities).mockResolvedValue({} as never);
+    vi.mocked(getAdGuardStatus).mockResolvedValue({
+        configured: false,
+        provider_state: "not_configured",
+        router_ip: "192.168.88.1",
+        filtering_enabled: null,
+        filter_count: null,
+        dhcp_inventory: "unsupported",
+        network_wide_enforcement: "not_verified",
+        guidance: [],
+    });
     vi.mocked(getRouterDevices).mockResolvedValue({} as never);
     vi.mocked(testRouter).mockResolvedValue({} as never);
 });

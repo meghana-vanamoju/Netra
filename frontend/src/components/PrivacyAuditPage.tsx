@@ -4,10 +4,13 @@ import {
   getAuditFindings,
   getAuditReports,
   getDevices,
+  getPrivacyScore,
+  previewPolicies,
   runAudit,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
 import { LocalizedTree } from "../localization";
+import { useNetworkContext } from "../NetworkContext";
 import type {
   ApiError,
   AuditDetail,
@@ -15,6 +18,8 @@ import type {
   AuditReport,
   AuditRunResponse,
   Device,
+  PolicyDraft,
+  PrivacyScore,
   ResourceState,
 } from "../types";
 
@@ -162,6 +167,7 @@ function FindingsList({
 }
 
 export function PrivacyAuditPage() {
+  const { selectedSubnet, selectedDeviceId } = useNetworkContext();
   const [history, setHistory] = useState<ResourceState<AuditReport[]>>({
     status: "loading",
   });
@@ -181,6 +187,12 @@ export function PrivacyAuditPage() {
   const [runError, setRunError] = useState<ApiError | null>(null);
   const [runResult, setRunResult] = useState<AuditRunResponse | null>(null);
   const [historyReload, setHistoryReload] = useState(0);
+  const [privacyScore, setPrivacyScore] = useState<ResourceState<PrivacyScore>>({ status: "loading" });
+  const [policyPreview, setPolicyPreview] = useState<{ status: "idle" | "loading" | "ready"; drafts: PolicyDraft[]; error: ApiError | null }>({
+    status: "idle",
+    drafts: [],
+    error: null,
+  });
 
   const reloadHistory = useCallback(() => {
     setHistory({ status: "loading" });
@@ -201,11 +213,26 @@ export function PrivacyAuditPage() {
 
   useEffect(() => {
     reloadHistory();
-    void getDevices().then(
+    void getDevices(selectedSubnet ? { subnet: selectedSubnet } : {}).then(
       (items) => setDevices({ status: "ready", data: items }),
       (error: unknown) => setDevices({ status: "error", error: toApiError(error) }),
     );
-  }, [historyReload, reloadHistory]);
+    setPrivacyScore({ status: "loading" });
+    void getPrivacyScore(selectedSubnet ?? undefined, selectedDeviceId ?? undefined).then(
+      (score) => setPrivacyScore({ status: "ready", data: score }),
+      (error: unknown) => setPrivacyScore({ status: "error", error: toApiError(error) }),
+    );
+  }, [historyReload, reloadHistory, selectedSubnet, selectedDeviceId]);
+
+  useEffect(() => {
+    if (selectedDeviceId === null) {
+      return;
+    }
+    if (devices.status === "ready" && devices.data.some((device) => device.id === selectedDeviceId)) {
+      setScope("device");
+      setDeviceId(String(selectedDeviceId));
+    }
+  }, [selectedDeviceId, devices]);
 
   useEffect(() => {
     if (history.status === "ready" && selectedId === null && history.data.length > 0) {
@@ -246,6 +273,20 @@ export function PrivacyAuditPage() {
     };
   }, [selectedId]);
 
+  useEffect(() => {
+    setPolicyPreview({ status: "idle", drafts: [], error: null });
+  }, [selectedId]);
+
+  const loadPolicyPreview = () => {
+    if (selectedId === null) return;
+    setPolicyPreview({ status: "loading", drafts: [], error: null });
+    void previewPolicies(selectedId).then(
+      (result) => setPolicyPreview({ status: "ready", drafts: result.drafts, error: null }),
+      (error: unknown) =>
+        setPolicyPreview({ status: "ready", drafts: [], error: toApiError(error) }),
+    );
+  };
+
   const devicesById = useMemo(
     () =>
       new Map(
@@ -261,6 +302,19 @@ export function PrivacyAuditPage() {
       ? history.data.find((report) => report.id === selectedId)
       : undefined;
   const selectedRun = runResult && runResult.audit_id === selectedId ? runResult : null;
+  const severityCounts = useMemo(() => {
+    if (findings.status !== "ready") return [];
+    const counts = new Map<string, number>();
+    for (const finding of findings.data) {
+      const key = finding.severity || "Unknown";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort(
+      (left, right) =>
+        severityOrder.indexOf(left[0].toLowerCase()) -
+        severityOrder.indexOf(right[0].toLowerCase()),
+    );
+  }, [findings]);
 
   const submitAudit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -277,6 +331,7 @@ export function PrivacyAuditPage() {
       const result = await runAudit(
         scope,
         scope === "device" ? Number(deviceId) : undefined,
+        scope === "network" ? selectedSubnet ?? undefined : undefined,
       );
       setRunResult(result);
       setSelectedId(result.audit_id);
@@ -316,6 +371,85 @@ export function PrivacyAuditPage() {
           Audits are read-only assessments of stored inventory and DNS records. A report is saved only after you start an audit; no policy is applied and no network scan is started.
         </span>
       </div>
+
+      <section className="audit-overview-grid" aria-label="Privacy score and severity distribution">
+        <article className="panel">
+          <div className="panel-header">
+            <div>
+              <div className="panel-kicker">OBSERVATION-BASED SCORE</div>
+              <h2>Privacy score</h2>
+            </div>
+            <span className="read-only-tag">DNS EVIDENCE</span>
+          </div>
+          {privacyScore.status === "loading" ? (
+            <div className="panel-state"><LoadingValue /><span>Loading privacy score…</span></div>
+          ) : privacyScore.status === "error" ? (
+            <div className="panel-state"><ErrorMessage error={privacyScore.error} /></div>
+          ) : (
+            <div className="audit-score-block">
+              <strong>{privacyScore.data.score}</strong>
+              <span>{privacyScore.data.explanation}</span>
+              <span>
+                {privacyScore.data.observed_events === 0
+                  ? "No DNS observations: this is no data, not a verified absence of risk."
+                  : `${privacyScore.data.tracking_events} tracking/telemetry events · ${privacyScore.data.unknown_events} uncategorized events`}
+              </span>
+            </div>
+          )}
+        </article>
+        <article className="panel">
+          <div className="panel-header">
+            <div>
+              <div className="panel-kicker">SELECTED REPORT</div>
+              <h2>Severity distribution</h2>
+            </div>
+            <span className="read-only-tag">{findings.status === "ready" ? findings.data.length : "—"} FINDINGS</span>
+          </div>
+          {findings.status === "loading" ? (
+            <div className="panel-state"><LoadingValue /><span>Loading findings…</span></div>
+          ) : severityCounts.length === 0 ? (
+            <div className="audit-empty-state">
+              <span className="empty-icon"><Icon name="check" size={19} /></span>
+              <strong>No findings reported</strong>
+              <span>An empty audit result means no evidence-backed findings were returned.</span>
+            </div>
+          ) : (
+            <div className="severity-distribution">
+              {severityCounts.map(([severity, count]) => (
+                <div key={severity}>
+                  <span className={`audit-severity-tag ${severityClass(severity)}`}>{severity}</span>
+                  <strong>{count}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+        <article className="panel">
+          <div className="panel-header">
+            <div>
+              <div className="panel-kicker">POLICY PREVIEW</div>
+              <h2>Dry-run proposal</h2>
+            </div>
+            <span className="read-only-tag">NOT SAVED</span>
+          </div>
+          <p>Generate a non-persistent policy preview from the selected audit's evidence.</p>
+          <button className="secondary-button" type="button" onClick={loadPolicyPreview} disabled={selectedId === null || policyPreview.status === "loading"}>
+            {policyPreview.status === "loading" ? "Generating preview…" : "Preview policies"}
+          </button>
+          {policyPreview.error && <ErrorMessage error={policyPreview.error} />}
+          {policyPreview.status === "ready" && policyPreview.drafts.length === 0 && (
+            <p className="audit-unknown-evidence">No evidence-backed policy drafts were produced for this report.</p>
+          )}
+          {policyPreview.drafts.map((draft, index) => (
+            <details className="policy-preview-item" key={`${draft.name}-${index}`}>
+              <summary>{draft.name} · {draft.risk}</summary>
+              <p>{draft.reason}</p>
+              {draft.evidence?.length > 0 && <ul>{draft.evidence.map((item, itemIndex) => <li key={itemIndex}>{item}</li>)}</ul>}
+              <small>{draft.recommended_next_step}</small>
+            </details>
+          ))}
+        </article>
+      </section>
 
       <section className="audit-capability-grid" aria-label="Audit capabilities">
         <article className="audit-capability-card">

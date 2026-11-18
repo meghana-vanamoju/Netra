@@ -1,20 +1,26 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  createPolicy,
+  deletePolicy,
   generatePolicyPlan,
   getAuditFindings,
   getAuditReports,
+  getDevices,
   getDryRunImpact,
   getPolicies,
   getPolicy,
   getSavedDryRunPlan,
   runPolicyDryRun,
+  updatePolicy,
 } from "../api";
 import { ErrorMessage, Icon, LoadingValue } from "./ui";
 import { LocalizedTree } from "../localization";
+import { useNetworkContext } from "../NetworkContext";
 import type {
   ApiError,
   AuditFinding,
   AuditReport,
+  Device,
   DryRunImpact,
   DryRunResult,
   PolicyDetail,
@@ -37,6 +43,36 @@ type SavedDryRun = {
   plan: ResourceState<SavedDryRunPlan>;
   impact: ResourceState<DryRunImpact>;
 };
+
+type PolicyEditor = {
+  open: boolean;
+  editingId: number | null;
+  name: string;
+  description: string;
+  targetDeviceId: number | null;
+  enabled: boolean;
+  blockedDomains: string;
+  allowedDomains: string;
+  deleteConfirmId: number | null;
+  busy: boolean;
+  error: ApiError | null;
+  message: string;
+};
+
+const emptyEditor = (targetDeviceId: number | null): PolicyEditor => ({
+  open: false,
+  editingId: null,
+  name: "",
+  description: "",
+  targetDeviceId,
+  enabled: true,
+  blockedDomains: "",
+  allowedDomains: "",
+  deleteConfirmId: null,
+  busy: false,
+  error: null,
+  message: "",
+});
 
 function toApiError(error: unknown): ApiError {
   return error instanceof Error
@@ -96,6 +132,7 @@ async function loadPolicyRows(): Promise<PolicyRow[]> {
 }
 
 export function PolicyPlanningPage() {
+  const { selectedSubnet, selectedDeviceId, clearNetworkContext } = useNetworkContext();
   const [audits, setAudits] = useState<ResourceState<AuditReport[]>>({
     status: "loading",
   });
@@ -118,13 +155,17 @@ export function PolicyPlanningPage() {
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [savedDryRun, setSavedDryRun] = useState<SavedDryRun | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [editor, setEditor] = useState<PolicyEditor>(() =>
+    emptyEditor(selectedDeviceId),
+  );
 
   useEffect(() => {
     let active = true;
     setAudits({ status: "loading" });
     setPolicies({ status: "loading" });
 
-    void Promise.allSettled([getAuditReports(), loadPolicyRows()]).then(
+    void Promise.allSettled([getAuditReports(selectedSubnet ?? undefined), loadPolicyRows()]).then(
       ([auditResult, policyResult]) => {
         if (!active) {
           return;
@@ -150,7 +191,22 @@ export function PolicyPlanningPage() {
     return () => {
       active = false;
     };
-  }, [reloadVersion]);
+  }, [reloadVersion, selectedSubnet]);
+
+  useEffect(() => {
+    let active = true;
+    void getDevices(selectedSubnet ? { subnet: selectedSubnet } : {}).then(
+      (items) => {
+        if (active) setDevices(items);
+      },
+      () => {
+        if (active) setDevices([]);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [selectedSubnet]);
 
   useEffect(() => {
     const auditId = selectedAuditId ? Number(selectedAuditId) : null;
@@ -182,6 +238,42 @@ export function PolicyPlanningPage() {
     audits.status === "ready"
       ? audits.data.find((audit) => audit.id === Number(selectedAuditId))
       : undefined;
+  const visibleAudits = useMemo(
+    () =>
+      audits.status === "ready"
+        ? audits.data.filter((audit) => {
+            if (
+              selectedSubnet &&
+              (audit.network_subnet ?? audit.summary?.network_subnet) !==
+                selectedSubnet
+            ) {
+              return false;
+            }
+            if (
+              selectedDeviceId !== null &&
+              audit.device_id !== null &&
+              audit.device_id !== selectedDeviceId
+            ) {
+              return false;
+            }
+            return true;
+          })
+        : [],
+    [audits, selectedSubnet, selectedDeviceId],
+  );
+
+  const visiblePolicies = useMemo(
+    () =>
+      policies.status === "ready" && selectedDeviceId !== null
+        ? policies.data.filter((row) => {
+            const target = row.detail.status === "ready" ? row.detail.data.target : null;
+            return target === null || Number(target) === selectedDeviceId;
+          })
+        : policies.status === "ready"
+          ? policies.data
+          : [],
+    [policies, selectedDeviceId],
+  );
   const matchingFindings =
     auditFindings.status === "ready" && auditFindingsKey === Number(selectedAuditId)
       ? auditFindings.data.filter((finding) =>
@@ -279,16 +371,118 @@ export function PolicyPlanningPage() {
     setDryRunConfirmed(false);
   };
 
+  const openNewPolicy = () => {
+    setEditor({ ...emptyEditor(selectedDeviceId), open: true });
+  };
+
+  const openEditPolicy = (row: PolicyRow) => {
+    if (row.detail.status !== "ready") {
+      setEditor({
+        ...emptyEditor(selectedDeviceId),
+        open: true,
+        error:
+          row.detail.status === "error"
+            ? row.detail.error
+            : new Error("Policy detail is still loading; try again shortly."),
+      });
+      return;
+    }
+    const detail = row.detail.data;
+    setEditor({
+      ...emptyEditor(detail.target_device_id ?? selectedDeviceId),
+      open: true,
+      editingId: detail.id,
+      name: detail.name,
+      description: detail.description ?? "",
+      targetDeviceId: detail.target_device_id ?? null,
+      enabled: detail.config.enabled,
+      blockedDomains: (detail.config.blocked_domains ?? []).join("\n"),
+      allowedDomains: (detail.config.allowed_domains ?? []).join("\n"),
+    });
+  };
+
+  const parseDomains = (value: string) =>
+    value
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const savePolicy = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setEditor((current) => ({ ...current, busy: true, error: null, message: "" }));
+    const payload = {
+      name: editor.name,
+      description: editor.description,
+      target_device_id: editor.targetDeviceId,
+      enabled: editor.enabled,
+      blocked_domains: parseDomains(editor.blockedDomains),
+      allowed_domains: parseDomains(editor.allowedDomains),
+    };
+    try {
+      if (editor.editingId !== null) {
+        await updatePolicy(editor.editingId, payload);
+        setEditor((current) => ({
+          ...current,
+          busy: false,
+          message: `Policy #${current.editingId} was updated.`,
+        }));
+      } else {
+        const created = await createPolicy(payload);
+        setEditor((current) => ({
+          ...current,
+          busy: false,
+          editingId: created.id,
+          message: `Policy #${created.id} was saved as a proposal.`,
+        }));
+      }
+      setReloadVersion((version) => version + 1);
+    } catch (error) {
+      setEditor((current) => ({
+        ...current,
+        busy: false,
+        error: toApiError(error),
+      }));
+    }
+  };
+
+  const removePolicy = async (policyId: number) => {
+    if (editor.deleteConfirmId !== policyId) return;
+    setEditor((current) => ({ ...current, busy: true, error: null, message: "" }));
+    try {
+      await deletePolicy(policyId);
+      setEditor((current) => ({
+        ...current,
+        busy: false,
+        deleteConfirmId: null,
+        open: current.editingId === policyId ? false : current.open,
+        editingId: current.editingId === policyId ? null : current.editingId,
+        message: `Policy #${policyId} was deleted.`,
+      }));
+      setReloadVersion((version) => version + 1);
+    } catch (error) {
+      setEditor((current) => ({ ...current, busy: false, error: toApiError(error) }));
+    }
+  };
+
   return (
     <LocalizedTree>
     <section className="policy-page">
       <div className="page-heading">
         <div>
-          <div className="eyebrow"><span className="eyebrow-line" /> POLICY WORKSPACE</div>
-          <h1>Policy <span>planning.</span></h1>
+          <div className="eyebrow"><span className="eyebrow-line" /> DEVICE POLICY WORKSPACE</div>
+          <h1>Device <span>policies.</span></h1>
           <p className="page-description">
-            Generate saved proposals from completed audits and evaluate selected policies against recorded data.
+            Create, edit and delete device-targeted DNS policies, generate proposals from audits, and evaluate saved policies against recorded data. Saved configuration is shown separately from enforcement state.
           </p>
+          {(selectedSubnet || selectedDeviceId !== null) && (
+            <p className="muted-copy">
+              Active context: {selectedSubnet ? <span data-no-translate="true">{selectedSubnet}</span> : "all networks"}
+              {selectedDeviceId !== null ? ` · device #${selectedDeviceId}` : " · all devices"}
+              <button type="button" className="secondary-button" onClick={() => clearNetworkContext()}>
+                Clear device selection
+              </button>
+            </p>
+          )}
         </div>
         <button
           className="refresh-button"
@@ -307,6 +501,116 @@ export function PolicyPlanningPage() {
           Planning writes proposed policies to the backend. Dry-run saves a plan record. Neither action approves, applies, enforces, or activates protection.
         </span>
       </div>
+
+      <section className="panel policy-editor-panel">
+        <div className="panel-header">
+          <div>
+            <div className="panel-kicker">SAVED CONFIGURATION</div>
+            <h2>{editor.editingId !== null ? `Edit policy #${editor.editingId}` : "Create a device policy"}</h2>
+          </div>
+          <button className="secondary-button" type="button" onClick={openNewPolicy}>
+            <Icon name="shield" size={15} /> New policy
+          </button>
+        </div>
+        <p className="policy-action-description">
+          Only genuinely supported controls are offered: DNS block and allow rules, an enabled flag, and an optional target device. Internet access controls and schedules are unavailable and are never stored as active controls.
+        </p>
+        {editor.open ? (
+          <form className="policy-form policy-create-form" onSubmit={(event) => void savePolicy(event)}>
+            <div className="policy-form-grid">
+              <label className="filter-control">
+                <span>Name</span>
+                <input
+                  value={editor.name}
+                  maxLength={128}
+                  required
+                  onChange={(event) => setEditor((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label className="filter-control">
+                <span>Target device</span>
+                <select
+                  value={editor.targetDeviceId ?? ""}
+                  onChange={(event) =>
+                    setEditor((current) => ({
+                      ...current,
+                      targetDeviceId: event.target.value ? Number(event.target.value) : null,
+                    }))
+                  }
+                >
+                  <option value="">All devices / network scope</option>
+                  {devices.map((device) => (
+                    <option key={device.id} value={device.id}>
+                      {device.hostname || device.ip_address || `Device #${device.id}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="filter-control">
+              <span>Description / rationale</span>
+              <textarea
+                value={editor.description}
+                rows={2}
+                onChange={(event) => setEditor((current) => ({ ...current, description: event.target.value }))}
+              />
+            </label>
+            <div className="policy-form-grid">
+              <label className="filter-control">
+                <span>Blocked domains (one per line)</span>
+                <textarea
+                  value={editor.blockedDomains}
+                  rows={4}
+                  data-no-translate="true"
+                  placeholder={"tracker.example.net\nads.example.com"}
+                  onChange={(event) => setEditor((current) => ({ ...current, blockedDomains: event.target.value }))}
+                />
+              </label>
+              <label className="filter-control">
+                <span>Allowed domains (one per line)</span>
+                <textarea
+                  value={editor.allowedDomains}
+                  rows={4}
+                  data-no-translate="true"
+                  placeholder={"needed.example.org"}
+                  onChange={(event) => setEditor((current) => ({ ...current, allowedDomains: event.target.value }))}
+                />
+              </label>
+            </div>
+            <label className="policy-confirmation">
+              <input
+                type="checkbox"
+                checked={editor.enabled}
+                onChange={(event) => setEditor((current) => ({ ...current, enabled: event.target.checked }))}
+              />
+              <span>Policy is enabled in saved configuration (not enforcement state)</span>
+            </label>
+            {editor.error && <ErrorMessage error={editor.error} />}
+            {editor.message && <div className="policy-action-success" role="status">{editor.message}</div>}
+            <div className="policy-editor-actions">
+              <button className="primary-button" type="submit" disabled={editor.busy || !editor.name.trim()}>
+                {editor.busy ? "Saving…" : editor.editingId !== null ? "Save changes" : "Create proposal"}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setEditor(emptyEditor(selectedDeviceId))}
+                disabled={editor.busy}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="policy-empty-state compact-empty">
+            <span className="empty-icon"><Icon name="shield" size={18} /></span>
+            <strong>No policy selected for editing</strong>
+            <span>Use “New policy” or the Edit action in the saved policy table.</span>
+          </div>
+        )}
+        {!editor.open && editor.message && <div className="policy-action-success" role="status">{editor.message}</div>}
+        {!editor.open && editor.error && <ErrorMessage error={editor.error} />}
+      </section>
 
       <section className="policy-action-grid">
         <article className="panel policy-action-panel">
@@ -331,19 +635,19 @@ export function PolicyPlanningPage() {
                   setGeneratedPlan(null);
                   setPlanningConfirmed(false);
                 }}
-                disabled={audits.status !== "ready" || audits.data.length === 0 || planning}
+                disabled={audits.status !== "ready" || visibleAudits.length === 0 || planning}
                 required
               >
                 <option value="">
                   {audits.status === "loading"
                     ? "Loading audit reports…"
                     : audits.status === "error"
-                      ? "Audit history unavailable"
-                      : audits.data.length === 0
-                        ? "No saved audit reports"
-                        : "Choose a saved report"}
+                      ? "Audit reports unavailable"
+                      : visibleAudits.length === 0
+                        ? "No saved audit reports for the selected network"
+                        : "Choose a saved audit"}
                 </option>
-                {audits.status === "ready" && audits.data.map((audit) => (
+                {audits.status === "ready" && visibleAudits.map((audit) => (
                   <option value={audit.id} key={audit.id}>
                     {auditScope(audit.scope)} audit · #{audit.id} · {formatDate(audit.created_at)}
                   </option>
@@ -385,7 +689,7 @@ export function PolicyPlanningPage() {
                 planning ||
                 !planningConfirmed ||
                 audits.status !== "ready" ||
-                audits.data.length === 0 ||
+                visibleAudits.length === 0 ||
                 !selectedAuditId
               }
             >
@@ -431,7 +735,7 @@ export function PolicyPlanningPage() {
               <p>Saved policies are unavailable.</p>
               <ErrorMessage error={policies.error} />
             </div>
-          ) : policies.data.length === 0 ? (
+          ) : visiblePolicies.length === 0 ? (
             <div className="policy-empty-state">
               <span className="empty-icon"><Icon name="shield" size={18} /></span>
               <strong>No saved policies</strong>
@@ -441,7 +745,7 @@ export function PolicyPlanningPage() {
             <form className="dry-run-form" onSubmit={(event) => void createDryRun(event)}>
               <fieldset className="policy-selection">
                 <legend>Select saved policies for this projection</legend>
-                {policies.data.map((row) => (
+                {visiblePolicies.map((row) => (
                   <label className="policy-select-row" key={row.summary.id}>
                     <input
                       type="checkbox"
@@ -479,7 +783,9 @@ export function PolicyPlanningPage() {
                         <div><dt>Action</dt><dd>{row.detail.data.action || "Not provided"}</dd></div>
                         <div><dt>Risk</dt><dd>{row.detail.data.risk || "Not provided"}</dd></div>
                         <div><dt>Reversible</dt><dd>{row.detail.data.reversible ? "Reported reversible" : "Not reported as reversible"}</dd></div>
-                        <div><dt>Target</dt><dd>Not exposed by the policy detail endpoint</dd></div>
+                        <div><dt>Target</dt><dd>{row.detail.data.target_device_id ? `Device #${row.detail.data.target_device_id}` : "Network scope"}</dd></div>
+                        <div><dt>Enabled in saved config</dt><dd>{row.detail.data.config.enabled ? "Yes" : "No"}</dd></div>
+                        <div><dt>Enforcement state</dt><dd>{row.detail.data.status}</dd></div>
                       </dl>
                     )}
                   </details>
@@ -580,7 +886,7 @@ export function PolicyPlanningPage() {
             <div className="panel-kicker">BACKEND-SAVED RECORDS</div>
             <h2>Saved policies</h2>
           </div>
-          {policies.status === "ready" && <span className="read-only-tag">{policies.data.length} TOTAL</span>}
+          {policies.status === "ready" && <span className="read-only-tag">{visiblePolicies.length} TOTAL</span>}
         </div>
         <p className="policy-action-description">
           Status and available details below are read from the policy APIs. This page provides no approval, apply, or enforcement controls.
@@ -591,7 +897,7 @@ export function PolicyPlanningPage() {
           <div className="policy-list-error">
             <ErrorMessage error={policies.error} />
           </div>
-        ) : policies.data.length === 0 ? (
+        ) : visiblePolicies.length === 0 ? (
           <div className="policy-empty-state">
             <span className="empty-icon"><Icon name="shield" size={18} /></span>
             <strong>No policies in the backend</strong>
@@ -601,10 +907,10 @@ export function PolicyPlanningPage() {
           <div className="inventory-table-wrap">
             <table className="device-table policy-table">
               <thead>
-                <tr><th>POLICY</th><th>ID</th><th>RISK</th><th>STATUS</th><th>ACTION</th><th>REVERSIBLE</th></tr>
+                <tr><th>POLICY</th><th>ID</th><th>TARGET</th><th>CONFIG</th><th>ENFORCEMENT</th><th>RULES</th><th>CONTROLS</th></tr>
               </thead>
               <tbody>
-                {policies.data.map((row) => (
+                {visiblePolicies.map((row) => (
                   <tr key={row.summary.id}>
                     <td className="policy-name-cell">
                       {row.summary.name
@@ -612,7 +918,18 @@ export function PolicyPlanningPage() {
                         : "Name unavailable"}
                     </td>
                     <td>#{row.summary.id}</td>
-                    <td>{row.summary.risk || "Unknown"}</td>
+                    <td>
+                      {row.detail.status === "ready"
+                        ? row.detail.data.target_device_id
+                          ? `Device #${row.detail.data.target_device_id}`
+                          : "Network scope"
+                        : "Loading"}
+                    </td>
+                    <td>
+                      {row.detail.status === "ready"
+                        ? row.detail.data.config.enabled ? "Enabled" : "Disabled"
+                        : "Loading"}
+                    </td>
                     <td>
                       <span className={`policy-status ${statusClass(row.summary.status)}`}>
                         {row.summary.status || "UNKNOWN"}
@@ -620,17 +937,40 @@ export function PolicyPlanningPage() {
                     </td>
                     <td>
                       {row.detail.status === "ready"
-                        ? row.detail.data.action || "Not provided"
-                        : row.detail.status === "error"
-                          ? "Unavailable"
-                          : "Loading"}
+                        ? `${(row.detail.data.config.blocked_domains ?? []).length} block / ${(row.detail.data.config.allowed_domains ?? []).length} allow`
+                        : "Loading"}
                     </td>
                     <td>
-                      {row.detail.status === "ready"
-                        ? row.detail.data.reversible ? "Yes" : "No"
-                        : row.detail.status === "error"
-                          ? "Unknown"
-                          : "Loading"}
+                      <div className="policy-row-actions">
+                        <button className="text-link" type="button" onClick={() => openEditPolicy(row)}>Edit</button>
+                        <button
+                          className="text-link danger-link"
+                          type="button"
+                          onClick={() =>
+                            setEditor((current) => ({
+                              ...current,
+                              deleteConfirmId:
+                                current.deleteConfirmId === row.summary.id
+                                  ? null
+                                  : row.summary.id,
+                              error: null,
+                            }))
+                          }
+                        >
+                          Delete
+                        </button>
+                        {editor.deleteConfirmId === row.summary.id && (
+                          <div className="policy-delete-confirm">
+                            <span>Delete policy #{row.summary.id}?</span>
+                            <button className="danger-button" type="button" onClick={() => void removePolicy(row.summary.id)} disabled={editor.busy}>
+                              Confirm delete
+                            </button>
+                            <button className="secondary-button" type="button" onClick={() => setEditor((current) => ({ ...current, deleteConfirmId: null }))}>
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -646,7 +986,7 @@ export function PolicyPlanningPage() {
       </section>
 
       <p className="policy-limitations">
-        Policy summaries do not expose descriptions, targets, or generation rationale; policy detail does not expose a target or audit linkage. Dry-run responses report aggregate counts without per-policy attribution. The saved plan endpoints are used only to confirm that the explicitly created plan can be read back. No policies are approved, applied, or enforced here.
+        Saved policies expose target, enabled state and supported DNS rule configuration. Enforcement state is reported separately and never inferred from a saved policy. Dry-run responses report aggregate counts without per-policy attribution. Approval, apply and rollback are handled on the Enforcement readiness page with explicit confirmation.
       </p>
     </section>
     </LocalizedTree>

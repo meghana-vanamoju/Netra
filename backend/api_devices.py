@@ -4,14 +4,14 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from db.session import get_db
-from db.models import Device
+from db.models import Device, DeviceObservation
 from schemas import DeviceCreate, DeviceOut
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 
 
 def _norm(v):
-    return v.strip().lower() if v else None
+    return v.strip().upper() if v else None
 
 
 @router.get("", response_model=list[DeviceOut])
@@ -19,11 +19,17 @@ def list_devices(
     ip: str | None = Query(None),
     hostname: str | None = Query(None),
     vendor: str | None = Query(None),
+    live: bool = Query(False),
+    subnet: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     q = db.query(Device)
+    if live:
+        q = q.filter(Device.is_current.is_(True))
+    if subnet:
+        q = q.filter(Device.network_subnet == subnet)
     if ip:
         q = q.filter(Device.ip_address == ip.strip())
     if hostname:
@@ -76,6 +82,16 @@ def register_device(payload: DeviceCreate, db: Session = Depends(get_db)):
         existing.last_seen = datetime.utcnow()
         db.commit()
         db.refresh(existing)
+        db.add(
+            DeviceObservation(
+                device_id=existing.id,
+                ip_address=existing.ip_address,
+                mac_address=existing.mac_address,
+                observed_at=datetime.utcnow(),
+                source="manual",
+            )
+        )
+        db.commit()
         return existing
 
     d = Device(
@@ -89,6 +105,16 @@ def register_device(payload: DeviceCreate, db: Session = Depends(get_db)):
     db.add(d)
     db.commit()
     db.refresh(d)
+    db.add(
+        DeviceObservation(
+            device_id=d.id,
+            ip_address=d.ip_address,
+            mac_address=d.mac_address,
+            observed_at=datetime.utcnow(),
+            source="manual",
+        )
+    )
+    db.commit()
     return d
 
 

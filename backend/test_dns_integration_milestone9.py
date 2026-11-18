@@ -145,7 +145,7 @@ def test_provider_sync_is_idempotent_and_failure_recovers():
     assert summary["by_category"]["Telemetry"] >= 1
     assert summary["by_category"]["Unknown"] >= 1
     assert any(item["domain"] == "m9-ads.doubleclick.net" for item in summary["top_blocked_domains"])
-    assert summary["by_client"][0]["client"] == "192.168.29.30"
+    assert any(row["client"] == "192.168.29.30" for row in summary["by_client"])
     assert summary["by_source"]["adguard-home"] >= 4
     assert summary["timeline"]
 

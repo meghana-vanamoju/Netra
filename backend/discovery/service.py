@@ -191,10 +191,12 @@ def discover_subnet(
     validate_subnet(cidr)
     net = ipaddress.ip_network(cidr, strict=False)
     initial_neighbors = {entry["ip"]: entry for entry in read_arp_table()}
+    all_hosts = list(net.hosts())
+    total_hosts = len(all_hosts)
     addresses = [
         str(address)
         for address in islice(
-            net.hosts(), max(0, min(int(max_hosts), MAX_HOSTS_PER_SCAN))
+            all_hosts, max(0, min(int(max_hosts), MAX_HOSTS_PER_SCAN))
         )
     ]
     host_timeout = max(0.1, float(timeout))
@@ -205,6 +207,17 @@ def discover_subnet(
     cancelled_count = 0
     overall_deadline_hit = False
     pending = set()
+
+    if metrics is not None:
+        metrics.update(
+            {
+                "hosts_in_subnet": total_hosts,
+                "hosts_probed": len(addresses),
+                "coverage_complete": total_hosts > 0
+                and len(addresses) >= total_hosts,
+                "probed_addresses": set(addresses),
+            }
+        )
 
     if addresses:
         executor = ThreadPoolExecutor(max_workers=probe_count)

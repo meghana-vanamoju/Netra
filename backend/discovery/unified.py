@@ -1,8 +1,9 @@
+import ipaddress
 from datetime import datetime
 
 from sqlalchemy import func
 
-from db.models import Device
+from db.models import Device, DeviceObservation
 
 
 def merge_devices(existing, new):
@@ -43,7 +44,9 @@ def merge_devices(existing, new):
     return out
 
 
-def upsert_inventory(db, records):
+def upsert_inventory(
+    db, records, *, network_subnet=None, scan_status=None, scan_partial=False
+):
     now = datetime.utcnow()
     for record in records:
         ip_address = record.get("ip_address")
@@ -86,6 +89,11 @@ def upsert_inventory(db, records):
             device.discovery_source = ",".join(sources)[:64] or source
             device.extra = metadata
             device.last_seen = now
+            if network_subnet:
+                device.is_current = True
+                device.network_subnet = network_subnet
+                device.last_scan_at = now
+                device.scan_status = "partial" if scan_partial else "complete"
         else:
             db.add(
                 Device(
@@ -97,6 +105,130 @@ def upsert_inventory(db, records):
                     first_seen=now,
                     last_seen=now,
                     extra=metadata,
+                    is_current=bool(network_subnet),
+                    network_subnet=network_subnet,
+                    last_scan_at=now if network_subnet else None,
+                    scan_status=("partial" if scan_partial else "complete")
+                    if network_subnet
+                    else None,
                 )
             )
+            db.flush()
+            device = (
+                db.query(Device)
+                .filter(func.upper(Device.mac_address) == mac_address)
+                .first()
+                if mac_address
+                else db.query(Device)
+                .filter(Device.ip_address == ip_address)
+                .order_by(Device.id.desc())
+                .first()
+            )
+        if (network_subnet or source) and device:
+            db.add(
+                DeviceObservation(
+                    device_id=device.id,
+                    ip_address=ip_address,
+                    mac_address=mac_address,
+                    network_subnet=network_subnet,
+                    observed_at=now,
+                    source=source,
+                )
+            )
+    db.commit()
+
+
+def replace_discovery_snapshot(
+    db,
+    subnet,
+    records,
+    *,
+    scan_partial=False,
+    probed_addresses=None,
+    coverage_complete=None,
+):
+    """Replace the current snapshot for one subnet without deleting history."""
+    now = datetime.utcnow()
+    if probed_addresses is None:
+        probed = None
+        coverage = True if coverage_complete is None else bool(coverage_complete)
+    else:
+        probed = {str(address) for address in probed_addresses}
+        if coverage_complete is None:
+            try:
+                network = ipaddress.ip_network(subnet, strict=False)
+                total_hosts = len(list(network.hosts()))
+            except ValueError:
+                total_hosts = 0
+            coverage = total_hosts > 0 and len(probed) >= total_hosts
+        else:
+            coverage = bool(coverage_complete)
+
+    upsert_inventory(
+        db,
+        records,
+        network_subnet=subnet,
+        scan_status="partial" if (scan_partial or not coverage) else "complete",
+        scan_partial=scan_partial or not coverage,
+    )
+
+    try:
+        network = ipaddress.ip_network(subnet, strict=False)
+    except ValueError:
+        db.commit()
+        return
+
+    observed_ips = {
+        record.get("ip_address") for record in records if record.get("ip_address")
+    }
+    observed_macs = {
+        record.get("mac_address", "").strip().upper()
+        for record in records
+        if record.get("mac_address")
+    }
+    for device in db.query(Device).all():
+        try:
+            in_subnet = ipaddress.ip_address(device.ip_address) in network
+        except ValueError:
+            in_subnet = False
+        if not in_subnet:
+            continue
+        observed = device.ip_address in observed_ips or (
+            device.mac_address and device.mac_address.upper() in observed_macs
+        )
+        if observed:
+            device.is_current = True
+            device.network_subnet = subnet
+            device.last_scan_at = now
+            device.scan_status = (
+                "partial" if (scan_partial or not coverage) else "complete"
+            )
+            metadata = dict(device.extra or {})
+            metadata["scan_completeness"] = (
+                "partial" if (scan_partial or not coverage) else "complete"
+            )
+            metadata["coverage_complete"] = coverage
+            device.extra = metadata
+        elif probed is not None and device.ip_address not in probed:
+            metadata = dict(device.extra or {})
+            metadata["scan_completeness"] = "not_probed"
+            metadata["coverage_complete"] = coverage
+            metadata["last_scan_subnet"] = subnet
+            device.extra = metadata
+        elif scan_partial or not coverage:
+            metadata = dict(device.extra or {})
+            metadata["partial_scan_subnet"] = subnet
+            metadata["scan_completeness"] = "partial"
+            metadata["coverage_complete"] = coverage
+            metadata["last_scan_at"] = now.isoformat()
+            device.extra = metadata
+        else:
+            device.is_current = False
+            device.network_subnet = None
+            metadata = dict(device.extra or {})
+            metadata["current_snapshot"] = "not_observed"
+            metadata["last_scan_subnet"] = subnet
+            metadata["scan_completeness"] = "complete"
+            metadata["coverage_complete"] = True
+            device.extra = metadata
     db.commit()

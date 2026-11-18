@@ -2,6 +2,7 @@ import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { Icon } from "./ui";
 import { LanguageSelector, LocalizedTree } from "../localization";
 import { ThemeSelector } from "../theme";
+import { useNetworkContext } from "../NetworkContext";
 import "../styles.css";
 
 export type AppPage =
@@ -12,16 +13,22 @@ export type AppPage =
   | "privacy-audit"
   | "policy-planning"
   | "enforcement-recovery"
+  | "bandwidth"
+  | "backups"
+  | "adguard-diagnostics"
   | "settings-backend";
 
 const navigation = [
   { label: "Overview", icon: "grid" as const, href: "#overview", page: "overview" as const },
   { label: "Devices", icon: "devices" as const, href: "#devices", page: "devices" as const },
   { label: "LAN discovery", icon: "pulse" as const, href: "#discovery", page: "discovery" as const },
-  { label: "DNS activity", icon: "pulse" as const, href: "#dns-activity", page: "dns-activity" as const },
+  { label: "DNS protection", icon: "shield" as const, href: "#dns-activity", page: "dns-activity" as const },
   { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit", page: "privacy-audit" as const },
-  { label: "Policy planning", icon: "shield" as const, href: "#policy-planning", page: "policy-planning" as const },
-  { label: "Enforcement & recovery", icon: "lock" as const, href: "#enforcement-recovery", page: "enforcement-recovery" as const },
+  { label: "Device policies", icon: "shield" as const, href: "#policy-planning", page: "policy-planning" as const },
+  { label: "Enforcement readiness", icon: "lock" as const, href: "#enforcement-recovery", page: "enforcement-recovery" as const },
+  { label: "Bandwidth monitor", icon: "pulse" as const, href: "#bandwidth", page: "bandwidth" as const },
+  { label: "Backup & recovery", icon: "lock" as const, href: "#backups", page: "backups" as const },
+  { label: "AdGuard diagnostics", icon: "router" as const, href: "#adguard-diagnostics", page: "adguard-diagnostics" as const },
   { label: "Settings & backend", icon: "router" as const, href: "#settings-backend", page: "settings-backend" as const },
 ];
 
@@ -43,6 +50,7 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const mobileNavRef = useRef<HTMLElement>(null);
+  const { selectedSubnet, selectedDeviceId } = useNetworkContext();
 
   useEffect(() => {
     const activeLink = mobileNavRef.current?.querySelector<HTMLElement>(
@@ -62,22 +70,19 @@ export function AppShell({
     event.preventDefault();
     onNavigate(item.page);
   };
-  const pageLabel =
-    page === "dns-activity"
-      ? "DNS activity"
-      : page === "devices"
-        ? "Devices"
-        : page === "discovery"
-          ? "LAN discovery"
-          : page === "privacy-audit"
-            ? "Privacy audit"
-            : page === "policy-planning"
-              ? "Policy planning"
-              : page === "enforcement-recovery"
-                ? "Enforcement & recovery"
-                : page === "settings-backend"
-                  ? "Settings & backend"
-            : "Overview";
+  const pageLabel: Record<AppPage, string> = {
+    overview: "Overview",
+    devices: "Devices",
+    discovery: "LAN discovery",
+    "dns-activity": "DNS protection",
+    "privacy-audit": "Privacy audit",
+    "policy-planning": "Device policies",
+    "enforcement-recovery": "Enforcement readiness",
+    bandwidth: "Bandwidth monitor",
+    backups: "Backup & recovery",
+    "adguard-diagnostics": "AdGuard diagnostics",
+    "settings-backend": "Settings & backend",
+  };
 
   return (
     <LocalizedTree>
@@ -137,9 +142,16 @@ export function AppShell({
           <div className="breadcrumb">
             <span>Workspace</span>
             <span className="breadcrumb-slash">/</span>
-            <strong>{pageLabel}</strong>
+            <strong>{pageLabel[page]}</strong>
           </div>
           <div className="topbar-actions">
+            <div className="context-chip" title="Selected network context">
+              <Icon name="pulse" size={14} />
+              <span data-no-translate="true">{selectedSubnet ?? "No subnet selected"}</span>
+              {selectedDeviceId !== null && (
+                <span className="context-device">Device #{selectedDeviceId}</span>
+              )}
+            </div>
             <LanguageSelector />
             <ThemeSelector />
             <div
@@ -174,19 +186,25 @@ export function AppShell({
             >
               <Icon name={item.icon} size={17} />
               <span>
-                {item.label === "DNS activity"
+                {item.page === "dns-activity"
                   ? "DNS"
-                  : item.label === "Privacy audit"
+                  : item.page === "privacy-audit"
                     ? "Audit"
-                    : item.label === "Policy planning"
+                    : item.page === "policy-planning"
                       ? "Policies"
-                      : item.label === "Enforcement & recovery"
+                      : item.page === "enforcement-recovery"
                         ? "Enforce"
-                        : item.label === "Settings & backend"
-                          ? "Settings"
-                    : item.label === "LAN discovery"
-                      ? "Discover"
-                    : item.label}
+                        : item.page === "bandwidth"
+                          ? "Traffic"
+                          : item.page === "backups"
+                            ? "Backups"
+                            : item.page === "adguard-diagnostics"
+                              ? "Diagnostics"
+                              : item.page === "settings-backend"
+                                ? "Settings"
+                                : item.page === "discovery"
+                                  ? "Discover"
+                                  : item.label}
               </span>
             </a>
           ))}

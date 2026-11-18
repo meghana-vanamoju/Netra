@@ -19,6 +19,9 @@ from api_enforcement import router as enforcement_router
 from api_verification import router as verification_router
 from api_recovery import router as recovery_router
 from api_router_discovery import router as router_discovery_router
+from api_bandwidth import router as bandwidth_router
+from api_dashboard import router as dashboard_router
+from api_diagnostics import router as diagnostics_router
 
 @asynccontextmanager
 async def lifespan(app):
@@ -42,6 +45,9 @@ app.include_router(enforcement_router)
 app.include_router(verification_router)
 app.include_router(recovery_router)
 app.include_router(router_discovery_router)
+app.include_router(bandwidth_router)
+app.include_router(diagnostics_router)
+app.include_router(dashboard_router)
 
 app.add_middleware(
     CORSMiddleware,

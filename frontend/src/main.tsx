@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { LocalizationProvider } from "./localization";
+import { NetworkProvider } from "./NetworkContext";
 import { ThemeProvider } from "./theme";
 
 const rootElement = document.getElementById("root");
@@ -12,7 +13,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <ThemeProvider>
     <LocalizationProvider>
-      <App />
+      <NetworkProvider>
+        <App />
+      </NetworkProvider>
     </LocalizationProvider>
   </ThemeProvider>,
 );
