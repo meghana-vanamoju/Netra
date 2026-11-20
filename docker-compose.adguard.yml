@@ -3,7 +3,7 @@ services:
     image: adguard/adguardhome:v0.107.50
     ports:
       - "3001:80"
-      - "53:53/udp"
+      - "127.0.0.1:5354:53/udp"
     volumes:
       - ./adguard-work:/opt/adguardhome/work
       - ./adguard-conf:/opt/adguardhome/conf

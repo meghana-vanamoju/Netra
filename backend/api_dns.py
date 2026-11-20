@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from db.models import DNSEvent, Device, ConfigSnapshot
 from db.session import get_db
 from dns.analytics import classify_domain, ingest_event, summary
+from dns.journal import enrich_from_journal
 from dns.providers.errors import ProviderError, STATE_MESSAGES
 from dns.providers.registry import (
     fetch_provider_queries,
@@ -216,10 +217,14 @@ def sync_events(db: Session = Depends(get_db), limit: Optional[int] = None):
                 "message": STATE_MESSAGES.get(error.state, str(error)),
             },
         ) from None
+    # Best-effort, copied-record enrichment. Source IDs and AdGuard filtering
+    # metadata are untouched; journal failure never blocks a normal sync.
+    records, _correlation = enrich_from_journal(records)
+
     from dns.analytics import ingest_events
 
     result = ingest_events(db, records, source=status.get("provider") or "provider")
-    return {
+    response = {
         "provider": status.get("provider"),
         "fetched": len(records),
         "inserted": result["inserted"],
@@ -227,6 +232,20 @@ def sync_events(db: Session = Depends(get_db), limit: Optional[int] = None):
         "skipped": result["skipped"],
         "state": "healthy",
     }
+    # Keep the original response shape unless journal evidence was actually
+    # available. Ambiguity is surfaced only when it can affect an event.
+    if _correlation.get("candidates") or _correlation.get("ambiguous"):
+        response["correlation"] = {
+            key: _correlation.get(key, 0)
+            for key in (
+                "candidates",
+                "enriched",
+                "already_matched",
+                "ambiguous",
+                "unmatched",
+            )
+        }
+    return response
 
 
 @router.get("/events")

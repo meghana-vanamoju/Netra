@@ -10,7 +10,7 @@ Netra is a privacy-first network guardian for home routers with read-only auditi
 - DNS analytics
 - Privacy audit reports
 - Policy dry-run planner
-- Consent/enforcement stubs (backend unavailable by default)
+- Connected-device hotspot status, non-mutating plans, loopback-only consent-gated network controls (nftables apply disabled by default)
 - Snapshots/rollback (backend unavailable)
 - Light/Dark/System themes
 
@@ -28,19 +28,27 @@ cd frontend && npm install && npm run dev
 4. Show DNS analytics.
 5. Run privacy audit.
 6. Show policy dry-run impact.
-7. Show consent requirement and backend unavailable.
+7. Open Connected Devices and show the detected hotspot/client states and
+   non-mutating plan. Do not apply a real network change during a general demo.
 8. Show theme switching.
 
 ## Live vs mocked
-- Backend APIs are live; no real router enforcement.
+- Backend APIs are live. DNS-policy enforcement and hotspot-client enforcement
+  are separate features. Hotspot-client enforcement can change only this Linux
+  host's nftables state after deliberate opt-in and confirmation.
 - Frontend uses live backend when available.
 
 ## Limitations
 - No active DNS protection.
 - No real router configuration changes.
-- No real enforcement backend configured.
+- Hotspot client controls are Linux-only, disabled by default, and not
+  validated against physical clients. See
+  [Network enforcement](NETWORK_ENFORCEMENT.md).
 
 ## Security/consent
 - Read-only by default.
-- Explicit consent required for policy application.
+- Explicit confirmation required for control application; plan/apply endpoints
+  accept loopback clients only.
+- Do not enable actual enforcement except on a disposable test host. The
+  backend has no general authentication system.
 - No credentials stored.

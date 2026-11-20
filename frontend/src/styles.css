@@ -5135,3 +5135,420 @@ html[data-theme="dark"] .discovery-page .discovery-empty {
     display: none;
   }
 }
+
+.network-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.network-status-card {
+  display: grid;
+  min-height: 132px;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.network-status-card strong {
+  color: var(--ink);
+  font-size: 15px;
+  text-transform: capitalize;
+}
+
+.network-status-card>span:not(.metric-label),
+.network-status-card small {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.network-enforcement-state.ready {
+  color: #328669;
+}
+
+.network-enforcement-state.disabled,
+.network-enforcement-state.dry_run,
+.network-enforcement-state.nftables_unavailable,
+.network-enforcement-state.interface_mismatch,
+.network-enforcement-state.hotspot_unavailable {
+  color: #a26d26;
+}
+
+.connected-device-panel {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.connected-device-header {
+  min-height: 68px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.connected-device-header h2 {
+  color: var(--ink);
+}
+
+.connected-device-count {
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #5870d4;
+  background: #eef1ff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.connected-device-table-wrap {
+  overflow-x: auto;
+}
+
+.connected-device-table {
+  min-width: 920px;
+}
+
+.connected-device-table th,
+.connected-device-table td {
+  padding-right: 14px;
+  padding-left: 14px;
+}
+
+.device-connection-state,
+.device-access-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.device-connection-state.connected,
+.device-access-state.allowed {
+  color: #328669;
+  background: #e9f6ef;
+}
+
+.device-connection-state.disconnected,
+.device-access-state.unknown,
+.device-access-state.pending,
+.device-access-state.blocked_pending_verification,
+.device-access-state.identity_validation_required {
+  color: #8a6c38;
+  background: #fbf3e4;
+}
+
+.device-access-state.blocked {
+  color: #a34747;
+  background: #faeaea;
+}
+
+.device-access-state.reconciliation_required,
+.device-access-state.enforcement_error {
+  color: #a34747;
+  background: #faeaea;
+}
+
+.device-access-error {
+  display: block;
+  max-width: 150px;
+  margin-top: 5px;
+  color: #a34747;
+  font-size: 9px;
+}
+
+.device-access-switch {
+  display: inline-flex;
+  min-width: 91px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px 5px 5px;
+  border: 1px solid #dfe5ec;
+  border-radius: 999px;
+  color: #4a5870;
+  background: #f5f7fa;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.device-access-switch>span:first-child {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #bdc7d4;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.device-access-switch.is-blocked {
+  border-color: #e7bcbc;
+  color: #9c4545;
+  background: #fff4f4;
+}
+
+.device-access-switch.is-blocked>span:first-child {
+  border-color: #c76161;
+  background: #c76161;
+}
+
+.device-access-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.network-control-loading,
+.network-control-error {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.network-control-loading .loading-value {
+  flex: 0 0 auto;
+}
+
+.network-control-error {
+  display: block;
+}
+
+.network-control-warning {
+  margin: 0 0 15px;
+  padding: 12px 15px;
+  border: 1px solid #efdfbb;
+  border-radius: 8px;
+  color: #735d34;
+  background: #fff9ec;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.network-control-warning ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.network-control-notice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 14px;
+  padding: 11px 14px;
+  border: 1px solid #d4eadc;
+  border-radius: 8px;
+  color: #328669;
+  background: #eff8f2;
+  font-size: 11px;
+}
+
+.network-control-notice button {
+  margin-left: auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: 17px;
+}
+
+.connected-device-empty {
+  padding: 42px 18px;
+}
+
+.connected-device-safety-note {
+  margin-top: 11px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.network-control-dialog-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 20px;
+  background: rgb(16 25 43 / 58%);
+}
+
+.network-control-dialog {
+  width: min(100%, 520px);
+  max-height: min(90vh, 760px);
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 22px 65px rgb(15 23 42 / 25%);
+}
+
+.network-control-dialog .dialog-header {
+  margin-bottom: 14px;
+}
+
+.network-control-dialog h2 {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.network-control-confirm-copy {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.network-control-target {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 14px 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.network-control-target span {
+  color: var(--muted);
+}
+
+.network-control-target strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.network-plan-summary {
+  display: grid;
+  gap: 5px;
+  margin: 13px 0;
+  padding: 11px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: rgb(148 163 184 / 8%);
+  font-size: 10px;
+}
+
+.network-plan-summary strong {
+  color: var(--ink);
+}
+
+.network-control-approver {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0 5px;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.network-control-approver input {
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  background: var(--surface);
+  font: inherit;
+}
+
+.network-control-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.network-control-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 1050px) {
+  .network-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .network-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .network-control-dialog {
+    padding: 16px;
+  }
+
+  .network-control-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .network-control-dialog-actions button {
+    width: 100%;
+  }
+}
+
+html[data-theme="dark"] .network-status-card,
+html[data-theme="dark"] .connected-device-panel,
+html[data-theme="dark"] .network-control-dialog {
+  border-color: #34425e;
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .network-status-card strong,
+html[data-theme="dark"] .connected-device-header h2,
+html[data-theme="dark"] .network-control-dialog h2,
+html[data-theme="dark"] .network-control-target strong,
+html[data-theme="dark"] .network-plan-summary strong {
+  color: #e6edf7;
+}
+
+html[data-theme="dark"] .connected-device-header {
+  border-color: #34425e;
+}
+
+html[data-theme="dark"] .device-access-switch {
+  border-color: #34425e;
+  color: #cad4e4;
+  background: #18243a;
+}
+
+html[data-theme="dark"] .device-access-switch.is-blocked {
+  border-color: #824a53;
+  color: #f0c4c4;
+  background: #301f2a;
+}
+
+html[data-theme="dark"] .network-control-warning {
+  border-color: #705c38;
+  color: #e2d2ad;
+  background: #292417;
+}
+
+html[data-theme="dark"] .network-control-notice {
+  border-color: #315b4c;
+  color: #9bd5b7;
+  background: #172a27;
+}
+
+html[data-theme="dark"] .network-control-target,
+html[data-theme="dark"] .network-control-approver input {
+  border-color: #34425e;
+  color: #e6edf7;
+  background: #101a2d;
+}

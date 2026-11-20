@@ -1,5 +1,13 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    JSON,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import declarative_base, relationship
 
 from sqlalchemy import Boolean
@@ -113,3 +121,70 @@ class ConfigSnapshot(Base):
     state_json = Column(JSON, nullable=True)
     checksum = Column(String(128), nullable=True)
     policy_id = Column(Integer, ForeignKey("policies.id"), nullable=True)
+
+
+class DeviceNetworkControl(Base):
+    """Additive per-device network-enforcement state.
+
+    Rows are created from reviewed dry-run plans only. Existing device, policy,
+    snapshot, and observation records are never rewritten by this model.
+    """
+
+    __tablename__ = "device_network_controls"
+    __table_args__ = (
+        UniqueConstraint(
+            "device_id", "mode", name="uq_device_network_control_device_mode"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(
+        Integer, ForeignKey("devices.id"), nullable=False, index=True
+    )
+    mode = Column(String(32), nullable=False)
+    action = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False, default="planned", index=True)
+    target_ip = Column(String(45), nullable=True)
+    mac_address = Column(String(17), nullable=True)
+    network_subnet = Column(String(64), nullable=True)
+    interface = Column(String(32), nullable=True)
+    nft_table = Column(String(64), nullable=True)
+    nft_set = Column(String(64), nullable=True)
+    nft_chain = Column(String(64), nullable=True)
+    nft_rule_handles_json = Column(JSON, nullable=True)
+    tc_root_handle = Column(String(16), nullable=True)
+    tc_classid = Column(String(16), nullable=True)
+    tc_filter_handle = Column(String(64), nullable=True)
+    upload_kbps = Column(Integer, nullable=True)
+    download_kbps = Column(Integer, nullable=True)
+    snapshot_id = Column(
+        Integer, ForeignKey("config_snapshots.id"), nullable=True
+    )
+    dry_run_plan_id = Column(
+        Integer, ForeignKey("dry_run_plans.id"), nullable=True
+    )
+    policy_id = Column(Integer, ForeignKey("policies.id"), nullable=True)
+    details_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class DeviceNetworkControlEvent(Base):
+    __tablename__ = "device_network_control_events"
+
+    id = Column(Integer, primary_key=True)
+    device_id = Column(
+        Integer, ForeignKey("devices.id"), nullable=False, index=True
+    )
+    action = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False, index=True)
+    plan_id = Column(Integer, ForeignKey("dry_run_plans.id"), nullable=True)
+    target_ip = Column(String(45), nullable=True)
+    interface = Column(String(32), nullable=True)
+    details_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)

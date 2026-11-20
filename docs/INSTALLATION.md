@@ -84,6 +84,16 @@ Never set this for a personal router unless you intend to change its DNS
 filtering. Read-only monitoring, sync, analytics, audit, and dry-run all work
 without it. See [AdGuard Home integration](ADGUARD_HOME_INTEGRATION.md).
 
+## Optional hotspot client controls
+
+The Connected Devices page discovers an existing Linux/NetworkManager Wi-Fi
+hotspot and can prepare consent-gated per-device Internet-access changes.
+Actual nftables changes are off by default and require an explicit opt-in,
+`nft`, and appropriate privileges for the backend process. No router or
+hotspot configuration is changed. Read the safety requirements and known
+limitations in [Network enforcement](NETWORK_ENFORCEMENT.md) before enabling
+the feature.
+
 CORS: the backend allows `http://localhost:5173`, `http://127.0.0.1:5173`, and
 `http://[::1]:5173`.
 ```

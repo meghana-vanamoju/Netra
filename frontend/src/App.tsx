@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import type { AppPage } from "./components/AppShell";
 import { DashboardPage } from "./components/DashboardPage";
 import { DeviceInventoryPage } from "./components/DeviceInventoryPage";
+import { ConnectedDevicesPage } from "./components/ConnectedDevicesPage";
 import { DiscoveryPage } from "./components/DiscoveryPage";
 import { DnsAnalyticsPage } from "./components/DnsAnalyticsPage";
 import { PrivacyAuditPage } from "./components/PrivacyAuditPage";
@@ -17,6 +18,7 @@ import { getDatabaseHealth, getHealth } from "./api";
 const pages: Record<string, AppPage> = {
   overview: "overview",
   devices: "devices",
+  "connected-devices": "connected-devices",
   discovery: "discovery",
   "dns-activity": "dns-activity",
   "privacy-audit": "privacy-audit",
@@ -73,6 +75,8 @@ export default function App() {
     switch (page) {
       case "devices":
         return <DeviceInventoryPage />;
+      case "connected-devices":
+        return <ConnectedDevicesPage />;
       case "discovery":
         return <DiscoveryPage />;
       case "dns-activity":

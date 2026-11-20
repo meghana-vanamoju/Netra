@@ -70,6 +70,145 @@ export type LocalNetworkInfo = {
   subnet: string | null;
 };
 
+export type NetworkTopologyStatus = {
+  uplink: {
+    connected: boolean;
+    connection_type: string | null;
+    interface: string | null;
+    ip_address: string | null;
+    gateway: string | null;
+    subnet: string | null;
+  };
+  hotspot: {
+    active: boolean;
+    interface: string | null;
+    ip_address: string | null;
+    subnet: string | null;
+    connection: string | null;
+  };
+  connected_device_count: number;
+  clients: Array<{
+    ip_address: string | null;
+    mac_address: string;
+    hostname: string | null;
+    connection_status: string;
+    identity_status: string;
+    sources: string[];
+  }>;
+  enforcement: {
+    status: string;
+    configuration_ready: boolean;
+    enabled: boolean;
+    dry_run: boolean;
+    privilege_model: string;
+    backend_cap_net_admin: string;
+    helper_status: string;
+    helper_authorized: boolean;
+    helper_socket_path: string;
+    helper_error: { code: string; message: string } | null;
+    nftables_binary_available: boolean | null;
+    nftables_inspection_status: string;
+    nftables_write_permission_status: string;
+    apply_permitted: boolean;
+    mutation_permitted: boolean;
+    firewall_rules_installed: boolean | null;
+    firewall_rules_verified: boolean | null;
+    physical_connectivity_status: "not_tested";
+    physical_connectivity_confirmed: false;
+    interface: string | null;
+    table: string;
+    warnings: string[];
+  };
+  warnings: string[];
+  access_control_authorization: string;
+  observed_at: string;
+};
+
+export type ConnectedDevice = {
+  device_id: number | null;
+  name: string;
+  ip_address: string | null;
+  mac_address: string | null;
+  hotspot_interface: string;
+  network_subnet: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+  connection_status: "connected" | "disconnected";
+  internet_access:
+  | "allowed"
+  | "blocked"
+  | "blocked_pending_verification"
+  | "reconciliation_required"
+  | "enforcement_error"
+  | "identity_validation_required"
+  | "unknown"
+  | "pending"
+  | string;
+  enforcement_status: string;
+  identity_status: string;
+  sources: string[];
+  enforcement_error?: unknown;
+  verification_status?: "rules_verified" | "rules_unverified";
+  firewall_rules_installed?: boolean;
+  firewall_rules_verified?: boolean;
+  physical_connectivity_status?: "not_tested";
+  physical_connectivity_confirmed?: false;
+};
+
+export type ConnectedDevicesResponse = {
+  devices: ConnectedDevice[];
+  connected_device_count: number;
+  warnings: string[];
+  observed_at?: string;
+};
+
+export type NetworkControlAction = "block_internet" | "restore_internet";
+
+export type NetworkControlPlanResponse = {
+  plan_id: number;
+  plan: {
+    action: NetworkControlAction;
+    device: {
+      device_id: number;
+      ip_address: string;
+      mac_address: string;
+      interface: string;
+    };
+    warnings: string[];
+    apply_allowed: boolean;
+    apply_blockers: string[];
+  };
+  impact: {
+    affected_devices: number[];
+    scope: string;
+    network_change: boolean;
+    note: string;
+  };
+};
+
+export type NetworkControlApplyResponse = {
+  status: string;
+  verified: boolean;
+  internet_access: "blocked" | "allowed" | "unknown";
+  configuration_ready: boolean;
+  firewall_rules_installed: boolean;
+  firewall_rules_verified: boolean;
+  physical_connectivity_status: "not_tested";
+  physical_connectivity_confirmed: false;
+};
+
+export type NetworkControlVerifyResponse = {
+  device_id: number;
+  internet_access: string;
+  verified: boolean;
+  configuration_ready?: boolean;
+  firewall_rules_installed?: boolean;
+  firewall_rules_verified?: boolean;
+  physical_connectivity_status?: "not_tested";
+  physical_connectivity_confirmed?: false;
+  verification?: Record<string, unknown>;
+};
+
 export type RouterTestResponse = {
   ip: string;
   reachable: boolean;

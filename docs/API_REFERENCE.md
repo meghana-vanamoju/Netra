@@ -64,6 +64,12 @@ returned to the frontend.
 - `POST /api/dns/events/sync` fetches real provider query logs and persists them
   idempotently. Events associate by exact verified client IP or configured
   AdGuard/host name mapping; no domain or identity is inferred from LAN discovery alone.
+  A best-effort, unprivileged NetworkManager dnsmasq journal lookup can enrich the
+  original client when exactly one forwarded candidate matches domain, query type,
+  gateway/upstream, and timestamp tolerance. Ambiguous matches are logged and left
+  unchanged; journal errors never fail the sync. Configure with
+  `NETRA_DNSMASQ_CORRELATION_ENABLED`, `NETRA_DNSMASQ_CORRELATION_TOLERANCE_SECONDS`,
+  and the bounded `NETRA_DNSMASQ_JOURNAL_*` variables documented in the README.
 - `GET /api/dns/providers/filtering` reports provider filtering status.
 - `POST /api/dns/providers/filtering/rules` blocks or unblocks a domain. It requires
   `confirm:true`, explicit DNS enforcement opt-in, and an AdGuard-compatible provider.
@@ -86,8 +92,12 @@ returned to the frontend.
 - `GET /api/dns/providers/statistics` — provider statistics (503 on failure).
 - `GET /api/dns/providers/filtering` — filtering state and user rules (503 on failure).
 - `POST /api/dns/events/sync` — fetch real provider queries, store new ones, and
-  return `{provider, fetched, inserted, duplicates, skipped, state}`. Returns
-  HTTP 503 with sanitized provider state when the provider is not healthy.
+  return `{provider, fetched, inserted, duplicates, skipped, state}`. When journal
+  evidence is available, an additive `correlation` object reports
+  `candidates`, `enriched`, `already_matched`, `ambiguous`, and `unmatched`;
+  a unique candidate with the same client is counted as `already_matched`, and
+  ambiguous events keep the original provider client. Returns HTTP 503 with
+  sanitized provider state when the provider is not healthy.
 - `GET /api/dns/events` — supports `limit`, `offset`, `device_id`, `blocked`,
   `source`; each row includes `domain`, `category`, `timestamp`, `query_type`,
   `client`, `client_name`, `reason`, `rules`, `upstream`, `source`, `confidence`.
@@ -123,6 +133,53 @@ blocking percentage is computed only over events with known blocked status.
 
 `/api/dns/sources/status` is retained for compatibility and now reports real
 provider state in additive fields.
+
+## Hotspot client internet access control
+
+These Linux-only endpoints observe an existing NetworkManager Wi-Fi hotspot;
+they do not start or configure one. They do not test external Internet
+reachability: `uplink.connected` means that a default route was detected.
+Connected clients require Wi-Fi station evidence correlated with a DHCP lease
+or neighbor entry. If the hotspot is unavailable, previously controlled
+devices remain listed as disconnected and applied controls are marked as
+requiring reconciliation rather than assumed to still be active.
+
+- `GET /api/network/status` — read-only uplink, hotspot, client-discovery, and
+  enforcement readiness status.
+- `GET /api/network/devices` — live associated clients plus saved controls for
+  disconnected devices. Access is reported as `blocked`, `allowed`, `unknown`,
+  `blocked_pending_verification`, `reconciliation_required`, or
+  `enforcement_error`; `allowed` and `blocked` are used only after verification.
+- `GET /api/devices/{id}/network-control` — current state for a device.
+- `POST /api/devices/{id}/network-control/plan` with
+  `{"action":"block_internet"}` or `{"action":"restore_internet"}` — validates
+  a fresh device identity and persists a non-mutating dry-run plan.
+- `POST /api/devices/{id}/network-control/apply` with
+  `{"plan_id":1,"action":"block_internet","confirm":true,"approver":"..."}` —
+  applies only the matching reviewed plan and performs immediate verification.
+- `POST /api/devices/{id}/network-control/verify` — re-checks current
+  enforcement state without applying a change.
+- `GET /api/devices/{id}/network-control/history` — the latest 100 control
+  events.
+
+Plan and apply requests require a loopback peer address. Apply additionally
+requires explicit confirmation. Internet blocking requires both
+`NETRA_NETWORK_ENFORCEMENT_ENABLED=true` and
+`NETRA_NETWORK_ENFORCEMENT_DRY_RUN=false`. These controls are disabled and
+dry-run by default. With enforcement enabled,
+`restore_internet` remains available while dry-run is true to remove an
+existing Netra-owned restriction. An enabled backend must have `nft` installed
+and sufficient network-administration privileges; a successful apply is not
+claimed unless the requested result is verified. Loopback-only checks do not
+replace authentication, so do not expose or proxy the backend as a remotely
+accessible control service.
+
+Per-device rules are scoped to the hotspot interface, client MAC, and a
+device-specific nftables set. The control does not disable Wi-Fi association or
+change router/DNS configuration. No automatic startup recovery is implemented.
+Restoring a disconnected device is not supported until it is freshly observed
+on the hotspot; stale IP blocks are not transferred to a new address. See
+[Network enforcement](NETWORK_ENFORCEMENT.md) for setup and validation limits.
 
 ## Live overview, diagnostics and policy management
 

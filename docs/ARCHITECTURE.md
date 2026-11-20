@@ -5,6 +5,9 @@ graph TD
   Frontend[React Vite] --> Backend[FastAPI]
   Backend --> SQLite[(SQLite)]
   Backend --> Discovery[LAN + router discovery]
+  Backend --> Topology[Read-only host hotspot topology]
+  Backend --> NetworkControl[Consent-gated per-device control]
+  NetworkControl --> Nftables[Owned nftables rules]
   Backend --> ProviderRegistry[DNS provider registry]
   ProviderRegistry --> AdGuard[AdGuard Home HTTP API]
   ProviderRegistry --> PiHole[Pi-hole v6 API]
@@ -62,7 +65,11 @@ and refreshes both the in-memory scan results and persistent device inventory.
    preserves compatibility with `NETRA_PIHOLE_URL` / `NETRA_PIHOLE_TOKEN`.
 3. `POST /api/dns/events/sync` fetches a bounded, newest-first query log page
    set, normalizes timestamps/domains/clients, and stores rows idempotently via
-   `(source, source_event_id)`.
+   `(source, source_event_id)`. Before ingestion, a best-effort dnsmasq journal
+   reader may replace only the client IP on copied records when a unique
+   forwarded candidate matches domain, query type, gateway/upstream, and the
+   configured tolerance. Ambiguous or missing candidates leave provider data
+   unchanged, and journal failures never fail the sync.
 4. `dns/analytics.py` classifies domains with conservative suffix rules and
    computes totals, unique domains, blocked/allowed counts, category and client
    distributions, top domains, and hourly activity from stored events.
@@ -77,3 +84,30 @@ variables and are absent from API responses, logs, and status payloads.
 Components: frontend dashboard, backend API, SQLite persistence, discovery,
 DNS provider adapters, DNS analytics, audit, policy planning, consent-gated
 enforcement, snapshots, and recovery.
+
+## Host hotspot client controls
+
+The Connected Devices flow is separate from DNS-provider enforcement. A
+read-only topology detector uses the host default route, NetworkManager and
+`iw` station data, DHCP leases, and neighbor entries. A device is eligible for
+control only when current station evidence is correlated with a private IPv4
+address and a fresh, non-conflicting MAC/IP observation. The default-route
+signal does not prove that the public Internet is reachable.
+
+Plan requests persist a command projection only. Applying a reviewed plan is
+disabled by default and requires explicit environment opt-in, a loopback
+request, confirmation, and a fresh device observation. Blocking requires
+`NETRA_NETWORK_ENFORCEMENT_DRY_RUN=false`; restoring an existing restriction
+is allowed with enforcement enabled even while dry-run is true, as a fail-safe
+removal path. The nftables adapter owns a dedicated table/chain and
+device-specific set/rule references; it does not flush unrelated tables or
+alter Wi-Fi association, router settings, or DNS provider state. The API reads
+back the result before reporting access as blocked or allowed.
+
+On hotspot loss or process restart, stored control records are not treated as
+proof that a firewall rule is still active. Previously controlled devices
+remain visible as disconnected/reconciliation-required, but restoring one
+currently requires a fresh hotspot observation. There is no automatic
+startup recovery. The implementation has test coverage with fake command
+runners, not physical hotspot-client validation; see
+[Network enforcement](NETWORK_ENFORCEMENT.md).

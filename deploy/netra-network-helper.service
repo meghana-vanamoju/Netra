@@ -1,0 +1,51 @@
+# Example only. Do not install or activate without administrator review.
+[Unit]
+Description=Netra restricted network enforcement helper
+After=network.target
+ConditionPathExists=/opt/netra/backend/network_enforcement_helper.py
+
+[Service]
+Type=simple
+User=netra-helper
+Group=netra-helper
+SupplementaryGroups=netra-backend
+WorkingDirectory=/opt/netra/backend
+RuntimeDirectory=netra
+RuntimeDirectoryMode=0750
+UMask=0077
+Environment=PYTHONPATH=/opt/netra/backend
+Environment=NETRA_NETWORK_HELPER_SOCKET_PATH=/run/netra/network-enforcement.sock
+Environment=NETRA_NETWORK_HELPER_ALLOWED_UIDS=1000
+Environment=NETRA_NETWORK_HELPER_ALLOWED_TABLE=netra
+Environment=NETRA_NETWORK_HELPER_ALLOWED_INTERFACE=wlp2s0
+Environment=NETRA_NETWORK_HELPER_STATE_DIR=/var/lib/netra/network-enforcement
+Environment=NETRA_NETWORK_HELPER_COMMAND_TIMEOUT_SECONDS=3.0
+ExecStart=/usr/bin/python3 /opt/netra/backend/network_enforcement_helper.py
+Restart=on-failure
+RestartSec=2
+
+# Only this process receives CAP_NET_ADMIN. No shell, mount, or module
+# capabilities are granted, and all other capabilities are dropped.
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=true
+SecureBits=noroot noroot-locked
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/var/lib/netra/network-enforcement /run/netra
+
+[Install]
+WantedBy=multi-user.target

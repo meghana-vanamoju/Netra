@@ -29,7 +29,8 @@ Netra aims to:
 - DNS analytics, privacy audits, policy planning, enforcement lifecycle, snapshots, recovery, and backend capability APIs.
 - Real AdGuard Home query-log/statistics integration with authenticated API access, bounded idempotent sync, provider health states, and Pi-hole compatibility.
 - Evidence-based domain categorization (advertising, tracking/analytics, telemetry, social, CDN, essential, unknown) with category confidence and source labels.
-- React + TypeScript + Vite frontend with a responsive live dashboard and dedicated pages for DNS protection, privacy audit, device policies, enforcement readiness, host-local bandwidth, configuration snapshots, and AdGuard diagnostics.
+- React + TypeScript + Vite frontend with a responsive live dashboard and dedicated pages for DNS protection, privacy audit, connected-device internet access controls, device policies, enforcement readiness, host-local bandwidth, configuration snapshots, and AdGuard diagnostics.
+- Experimental Linux hotspot client internet-access controls with read-only topology discovery, per-device dry-run plans, explicit consent, and post-apply verification. Enforcement is disabled by default and has not been validated against physical hotspot clients.
 - Frontend/backend separation with dedicated backend domain modules.
 
 ### Not implemented / explicitly out of scope
@@ -39,8 +40,9 @@ Netra aims to:
 - Router-wide or client-level protection claims without independent router
   DHCP/DNS evidence and client query-log evidence.
 - Full database backups. Only provider configuration snapshots are available.
-- Internet-access scheduling and device internet-disable controls; the backend
-  does not expose these as supported modes.
+- Internet-access scheduling and production/hardware-validated client
+  enforcement. The experimental controls require Linux, a supported active
+  hotspot, nftables, explicit opt-in, and local confirmation.
 - Router-wide bandwidth accounting. Bandwidth is host-local
   (`netra-host-interface`) from `/proc/net/dev`.
 
@@ -225,7 +227,27 @@ export NETRA_ADGUARD_USERNAME='<AdGuard Home user>'
 export NETRA_ADGUARD_PASSWORD='<secret>'
 export NETRA_DNS_BACKEND=adguard          # optional when only AdGuard is configured
 export NETRA_DNS_ENFORCEMENT_ENABLED=true # opt-in only; omit for read-only monitoring
+
+# Optional dnsmasq correlation (enabled by default; no sudo required)
+export NETRA_DNSMASQ_CORRELATION_ENABLED=true
+export NETRA_DNSMASQ_CORRELATION_TOLERANCE_SECONDS=2
 ```
+
+`POST /api/dns/events/sync` can correlate AdGuard records whose client is the
+hotspot gateway with the original NetworkManager dnsmasq client. It reads a
+bounded `journalctl --unit NetworkManager --output short-unix` window and only
+enriches a copied record when exactly one forwarded candidate matches the
+normalized domain, query type, gateway/upstream, and timestamp tolerance.
+The additive `correlation` response field reports `enriched`,
+`already_matched`, `ambiguous`, and `unmatched` outcomes. A unique candidate
+whose client already matches is counted as `already_matched` and left unchanged;
+multiple matches are logged as ambiguous and also left unchanged. Journal failure,
+timeout, or permission denial never blocks normal synchronization; AdGuard's
+blocked/reason/rules/upstream/source metadata remains authoritative.
+Additional bounds are `NETRA_DNSMASQ_JOURNAL_WINDOW_SECONDS` (default `300`),
+`NETRA_DNSMASQ_JOURNAL_MAX_LINES` (default `2000`),
+`NETRA_DNSMASQ_JOURNAL_TIMEOUT_SECONDS` (default `2`), and
+`NETRA_DNSMASQ_JOURNAL_UNIT` (default `NetworkManager`).
 
 Then:
 
@@ -241,6 +263,40 @@ recorded as a configuration snapshot. See
 [AdGuard Home integration](docs/ADGUARD_HOME_INTEGRATION.md) for limits and
 hardware evidence.
 
+## Hotspot client internet access controls
+
+The Connected Devices page reports the host's default route, the active
+NetworkManager Wi-Fi hotspot, and associated clients correlated with DHCP
+leases or neighbor entries. A detected default route is not an end-to-end
+Internet reachability test. Device blocking is an experimental Linux feature;
+it does not configure the hotspot, router, DNS provider, or client Wi-Fi
+association.
+
+Controls are disabled by default. To enable Internet blocking, run the backend
+on the Netra host with the required nftables/network-administration privileges
+and set:
+
+```text
+NETRA_NETWORK_ENFORCEMENT_ENABLED=true
+NETRA_NETWORK_ENFORCEMENT_DRY_RUN=false
+# Optional: require a specific interface instead of using the detected hotspot.
+NETRA_NETWORK_ENFORCEMENT_INTERFACE=wlp2s0
+```
+
+The backend defaults to `NETRA_NETWORK_ENFORCEMENT_ENABLED=false` and
+`NETRA_NETWORK_ENFORCEMENT_DRY_RUN=true`; planning is non-mutating. With
+enforcement enabled, `restore_internet` remains available while dry-run is
+true as a fail-safe removal path; blocking still requires dry-run to be
+disabled. Plan and apply endpoints accept only loopback clients, and apply
+requires explicit confirmation after reviewing the plan. Loopback-only access
+is not a general authentication system. There is no automatic recovery after
+a restart, and a device that disconnects while blocked requires a fresh
+observation before it can be restored. Do not enable enforcement on a
+production host until it has been tested on the intended Linux/network
+configuration. See
+[Network enforcement](docs/NETWORK_ENFORCEMENT.md) for limitations and
+verification details.
+
 ## API
 
 ### Implemented
@@ -251,11 +307,11 @@ hardware evidence.
 - `GET /api/dns/providers/status`, `GET /api/dns/providers/statistics`, `GET /api/dns/providers/filtering`, `POST /api/dns/events/sync` — real provider state and bounded, idempotent query retrieval.
 - `GET /api/audits`, `GET /api/audits/{audit_id}`, and `GET /api/audits/{audit_id}/findings` — latest saved audit and findings; dashboard reads these without starting an audit.
 - `GET /api/backend/capabilities` — DNS backend configuration status, not proof of active enforcement.
+- `GET /api/network/status`, `GET /api/network/devices`, and per-device `network-control` plan/apply/verify/state/history routes — experimental hotspot client access controls; plan/apply are loopback-only and apply is disabled by default.
 
 ### Planned
 
-- Full device, DNS, audit, policy, and recovery management screens.
-- Localization and benchmarking.
+- Additional localization and benchmarking.
 
 ## Roadmap
 

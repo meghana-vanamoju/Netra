@@ -8,6 +8,7 @@ import "../styles.css";
 export type AppPage =
   | "overview"
   | "devices"
+  | "connected-devices"
   | "discovery"
   | "dns-activity"
   | "privacy-audit"
@@ -21,6 +22,7 @@ export type AppPage =
 const navigation = [
   { label: "Overview", icon: "grid" as const, href: "#overview", page: "overview" as const },
   { label: "Devices", icon: "devices" as const, href: "#devices", page: "devices" as const },
+  { label: "Connected Devices", icon: "devices" as const, href: "#connected-devices", page: "connected-devices" as const },
   { label: "LAN discovery", icon: "pulse" as const, href: "#discovery", page: "discovery" as const },
   { label: "DNS protection", icon: "shield" as const, href: "#dns-activity", page: "dns-activity" as const },
   { label: "Privacy audit", icon: "shield" as const, href: "#privacy-audit", page: "privacy-audit" as const },
@@ -73,6 +75,7 @@ export function AppShell({
   const pageLabel: Record<AppPage, string> = {
     overview: "Overview",
     devices: "Devices",
+    "connected-devices": "Connected Devices",
     discovery: "LAN discovery",
     "dns-activity": "DNS protection",
     "privacy-audit": "Privacy audit",
@@ -188,6 +191,8 @@ export function AppShell({
               <span>
                 {item.page === "dns-activity"
                   ? "DNS"
+                  : item.page === "connected-devices"
+                    ? "Hotspot"
                   : item.page === "privacy-audit"
                     ? "Audit"
                     : item.page === "policy-planning"

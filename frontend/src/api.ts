@@ -12,6 +12,7 @@ import type {
   DashboardSummary,
   DeviceClassification,
   Device,
+  ConnectedDevicesResponse,
   DiscoveryResponse,
   DiscoveryResult,
   DnsDeviceCount,
@@ -26,6 +27,11 @@ import type {
   EnforcementStatus,
   HealthResponse,
   LocalNetworkInfo,
+  NetworkControlAction,
+  NetworkControlApplyResponse,
+  NetworkControlPlanResponse,
+  NetworkControlVerifyResponse,
+  NetworkTopologyStatus,
   PolicyConfigInput,
   PolicyDetail,
   PolicyDraft,
@@ -158,6 +164,62 @@ export function runDiscovery(subnet: string) {
 
 export function getLocalNetworkInfo() {
   return requestJson<LocalNetworkInfo>("/api/discovery/network");
+}
+
+export function getNetworkTopologyStatus() {
+  return requestJson<NetworkTopologyStatus>("/api/network/status");
+}
+
+export function getConnectedDevices() {
+  return requestJson<ConnectedDevicesResponse>("/api/network/devices");
+}
+
+export function getNetworkControlState(deviceId: number) {
+  return requestJson<NetworkControlVerifyResponse>(
+    `/api/devices/${deviceId}/network-control`,
+  );
+}
+
+export function createNetworkControlPlan(
+  deviceId: number,
+  action: NetworkControlAction,
+) {
+  return requestJson<NetworkControlPlanResponse>(
+    `/api/devices/${deviceId}/network-control/plan`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    },
+  );
+}
+
+export function applyNetworkControl(
+  deviceId: number,
+  planId: number,
+  action: NetworkControlAction,
+  approver: string,
+) {
+  return requestJson<NetworkControlApplyResponse>(
+    `/api/devices/${deviceId}/network-control/apply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plan_id: planId,
+        action,
+        confirm: true,
+        approver,
+      }),
+    },
+  );
+}
+
+export function verifyNetworkControl(deviceId: number) {
+  return requestJson<NetworkControlVerifyResponse>(
+    `/api/devices/${deviceId}/network-control/verify`,
+    { method: "POST" },
+  );
 }
 
 export function testRouter(ip: string) {
